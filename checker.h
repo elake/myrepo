@@ -17,6 +17,6 @@ typedef struct {
   uint8_t y_tile;
   uint8_t king_status;
   uint8_t in_play;
-} Checker
+} Checker;
 
 #endif
