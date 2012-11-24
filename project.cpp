@@ -31,12 +31,13 @@
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 160
+#define BORDER_WIDTH 2 // Border surrounding the playable area
 
 const uint8_t CHECKERS_PER_SIDE = 12; // 12 pieces per side, as per game rules
 
 const uint8_t NUM_TILES = 64; // standard 8x8 board
 
-#define TILE_SIZE SCREEN_WIDTH / 8 // tile width and height in pixels
+#define TILE_SIZE (SCREEN_WIDTH - (2 *  BORDER_WIDTH) / 8 // tile width and height in pixels
 
 #define SD_CS 5
 #define TFT_CS 6
