@@ -56,6 +56,8 @@
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 160
 #define BORDER_WIDTH 4 // Border surrounding the playable area
+#define CBSQUARE_SIZE 8 // standard 8x8 checker board
+
 #define GRAVSTART_BLUEX 18 // the x, y start positions of the checkers in 
 #define GRAVSTART_REDX 66  // the graveyard
 #define GRAVSTART_Y 128 // both start at the same horizontal level
@@ -79,8 +81,8 @@ const uint8_t NUM_TILES = 64; // standard 8x8 board
 #define JOYSTICK_BUTTON 9   // Digitial input pin 9 for the button
 
 // Sub0.15: mode mapping
-#define TURN_RED 'r'
-#define TURN_BLUE 'b'
+#define TURN_RED 1
+#define TURN_BLUE -1
 #define SETUP_MODE 0
 #define PLAY_MODE 1
 #define GAMEOVER_MODE 2
@@ -92,6 +94,7 @@ const uint8_t NUM_TILES = 64; // standard 8x8 board
 // Sub0.20: checker arrays
 Checker red_checkers[CHECKERS_PER_SIDE];  // the array of red checkers
 Checker blue_checkers[CHECKERS_PER_SIDE]; // the array of blue checkers
+Checker* player_checkers;
 
 // Sub0.21: tile array
 Tile tile_array[NUM_TILES];
@@ -123,14 +126,19 @@ int joy_min_x;       // remap minima for the x and
 int joy_min_y;       // y readings from the joystick
 
 // Sub?: tile highlighting
-uint8_t x_highlight; // the x, y tile highlighted 
-uint8_t y_highlight;
+uint8_t x_highlight = 4; // the x, y tile highlighted 
+uint8_t y_highlight = 4;
 uint8_t tile_selected = 0; // whether we have selected a tile
+uint16_t delay_time = 100;
 
 // Sub?: game state
 uint8_t game_state = SETUP_MODE; // we need to set up the board
 uint8_t red_dead = 0;
 uint8_t blue_dead = 0;
+int8_t player_turn = 0;
+uint8_t recompute_force_jumps = 0;
+uint8_t current_state_a = 0; // debounce
+uint8_t no_fjumps = 0;
 
 //*****************************************************************************
 //                             Sec0.3: Functions     
@@ -184,13 +192,13 @@ void draw_tile(Tile* tile_array, Checker* red_checkers, Checker* blue_checkers,
 
   // draw over this tile with a symmetric tile depending on what 
   // checker it contains:
-  if (tile_array[tile_index].has_checker == '\0'){
+  if (tile_array[tile_index].has_checker == 0){
     // draw the blank tile
     lcd_image_draw(&cb_img, &tft, col, row, col, row, TILE_SIZE, TILE_SIZE);
   }
-  else if (tile_array[tile_index].has_checker == 'r'){
+  else if (tile_array[tile_index].has_checker == TURN_RED){
     // draw the tile with a red checker on it
-    if (red_checkers[tile_array[tile_index].checker_num].king_status) {
+    if (red_checkers[tile_array[tile_index].checker_num].is_kinged) {
       lcd_image_draw(&cbrk_image, &tft, col, row, col, row, 
 		     TILE_SIZE, TILE_SIZE);
     }
@@ -201,7 +209,7 @@ void draw_tile(Tile* tile_array, Checker* red_checkers, Checker* blue_checkers,
   }
   else {
     // draw the tile with a blue checker on it
-    if (blue_checkers[tile_array[tile_index].checker_num].king_status) {
+    if (blue_checkers[tile_array[tile_index].checker_num].is_kinged) {
       lcd_image_draw(&cbbk_image, &tft, col, row, col, row, 
 		     TILE_SIZE, TILE_SIZE);
     }
@@ -213,14 +221,14 @@ void draw_tile(Tile* tile_array, Checker* red_checkers, Checker* blue_checkers,
 }
 
 // Sub?: Tile highlighting
-void highlight_tile(uint8_t x, uint8_t y, char turn, uint8_t sel)
+void highlight_tile(uint8_t x, uint8_t y, int8_t turn, uint8_t sel)
 {
   /*
     draw a rect around the tile given by the x, y coordinates, with color 
     dependent on whose turn it is and whether the tile has been highlighted,
     where:
     x, y: the x, y tile to highlight
-    turn: whose turn it is ('r', 'b')
+    turn: whose turn it is (-1, 1)
     sel: whether the tile has been selected
 
     Uses consts: BORDER_WIDTH, TILE_SIZE
@@ -230,21 +238,19 @@ void highlight_tile(uint8_t x, uint8_t y, char turn, uint8_t sel)
   if (sel){
     color = ST7735_WHITE;
   }
-  else if (turn == 'r'){
+  else if (turn == -1){
     color = ST7735_RED;
   }
-  else{
+  else {
     color = ST7735_BLUE;
   }
-  Serial.print("highlighting tile: "); Serial.print("("); Serial.print(x);
-  Serial.print(", "); Serial.print(y); Serial.println(")");
   uint8_t col = BORDER_WIDTH + (TILE_SIZE * x);
   uint8_t row = BORDER_WIDTH + (TILE_SIZE * y);
   
   tft.drawRect(col, row, TILE_SIZE, TILE_SIZE, color);
 }
 
-void populate_graveyard(uint8_t num_dead, char turn)
+void populate_graveyard(uint8_t num_dead, int8_t turn)
 {
   // invariant: 1 <= num_dead <= 12
   if (( num_dead < 1 || num_dead > 12)){
@@ -274,9 +280,9 @@ void populate_graveyard(uint8_t num_dead, char turn)
   }
 }
 
-void turn_indicator(char turn)
+void turn_indicator(int8_t turn)
 {
-  if (turn == 'r'){
+  if (turn == -1){
     lcd_image_draw(&cbr_image, &tft, 0, 0, 0, 0, SCREEN_WIDTH, BORDER_WIDTH);
     lcd_image_draw(&cbr_image, &tft, 0, 0, 0, 0, BORDER_WIDTH, SCREEN_WIDTH);
     lcd_image_draw(&cbr_image, &tft, SCREEN_WIDTH - BORDER_WIDTH, 0, 
@@ -292,6 +298,60 @@ void turn_indicator(char turn)
     lcd_image_draw(&cbb_image, &tft, 0, SCREEN_WIDTH - BORDER_WIDTH, 0, 
 		   SCREEN_WIDTH - BORDER_WIDTH, SCREEN_WIDTH, BORDER_WIDTH);
   }
+}
+
+uint8_t* check_jumps(Tile* tile_array, Checker checker,
+				 int8_t opp_color)
+{
+  uint8_t force_jumps[4] = {0,0,0,0};
+  
+  if (tile_array[coord_to_tile(checker.x_tile -1, 
+			       checker.y_tile - 1)].has_checker == opp_color) {
+    if (tile_array[coord_to_tile(checker.x_tile - 2,
+				 checker.y_tile - 2)].has_checker == 0) {
+      force_jumps[0] = coord_to_tile(checker.x_tile - 2, checker.y_tile - 2);
+    }
+  }
+  if (tile_array[coord_to_tile(checker.x_tile + 1 , 
+			       checker.y_tile - 1)].has_checker == opp_color) {
+    if (tile_array[coord_to_tile(checker.x_tile + 2,
+				 checker.y_tile - 2)].has_checker == 0) {
+      force_jumps[1] = coord_to_tile(checker.x_tile + 2, checker.y_tile - 2);
+    }
+  }
+  if (tile_array[coord_to_tile(checker.x_tile - 1, 
+			       checker.y_tile + 1)].has_checker == opp_color) {
+    if (tile_array[coord_to_tile(checker.x_tile - 2,
+				 checker.y_tile + 2)].has_checker == 0) {
+      force_jumps[2] = coord_to_tile(checker.x_tile - 2, checker.y_tile + 2);
+    }
+  }
+  if (tile_array[coord_to_tile(checker.x_tile + 1, 
+			       checker.y_tile + 1)].has_checker == opp_color) {
+    if (tile_array[coord_to_tile(checker.x_tile + 2,
+				 checker.y_tile + 2)].has_checker == 0) {
+      force_jumps[3] = coord_to_tile(checker.x_tile + 2, checker.y_tile + 2);
+    }
+  }
+  return force_jumps;
+}
+
+uint8_t compute_force_jumps(Tile* tile_array, Checker* checkers, 
+			    int8_t opp_color)
+{
+  uint8_t* force_jumps;
+  uint8_t no_force_jumps = 1;
+
+  for (uint8_t i = 0; i < CHECKERS_PER_SIDE; i++){
+    force_jumps = check_jumps(tile_array, checkers[i], opp_color);
+    for (uint8_t j = 0; i < 4; i++){
+      if (force_jumps[j] != 0) {
+	checkers[j].must_jump = 1;
+	no_force_jumps = 0;
+      }
+    }
+  }
+  return no_force_jumps;
 }
 
 //*****************************************************************************
@@ -321,10 +381,9 @@ void setup()
 
   // Sub0.41 drawing the checker board
   tft.fillScreen(0); // fill to black  
-  lcd_image_draw(&cb_img, &tft, 0, 0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT );
+  lcd_image_draw(&cb_img, &tft, 0, 0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
   // Sub0.42: filling the checker and tile arrays
-
 
   // Sub0.43: set up pins
   // joystick
@@ -351,6 +410,13 @@ void setup()
 
 void loop()
 {
+  // read joystick input regardless of mode
+  joy_x = analogRead(JOYSTICK_HORIZ);
+  joy_y = analogRead(JOYSTICK_VERT);
+  // remap joy_x and joy_y to values in the range ~-1000 - 1000
+  joy_x = map((joy_x), VOLT_MIN, VOLT_MAX, joy_min_x, JOY_REMAP_MAX);
+  joy_y = map((joy_y), VOLT_MIN, VOLT_MAX, joy_min_y, JOY_REMAP_MAX);
+
   if (game_state == SETUP_MODE){
     // Fill the red checker array
     for (uint8_t i = 0; i < CHECKERS_PER_SIDE; i++) {	
@@ -359,7 +425,7 @@ void loop()
       red_checkers[i].x_tile = x_ti;
       red_checkers[i].y_tile = y_ti;
       // record that the proper tiles contain these checkers
-      tile_array[coord_to_tile(x_ti, y_ti)].has_checker = 'r';
+      tile_array[coord_to_tile(x_ti, y_ti)].has_checker = TURN_RED;
       tile_array[coord_to_tile(x_ti, y_ti)].checker_num = i;
     }
 
@@ -371,14 +437,18 @@ void loop()
       blue_checkers[i].x_tile = x_ti;
       blue_checkers[i].y_tile = y_ti;
       // record that the proper tiles contain these checkers
-      tile_array[coord_to_tile(x_ti, y_ti)].has_checker = 'b';
+      tile_array[coord_to_tile(x_ti, y_ti)].has_checker = TURN_BLUE;
       tile_array[coord_to_tile(x_ti, y_ti)].checker_num = i;
     }
-    for (uint8_t i = 1; i < 24; i = i + 2) {
+    for (uint8_t i = 1; i < 24; i = i + 2) { // draw all the checker tiles
       draw_tile(tile_array, red_checkers, blue_checkers, i - (i/8)%2);
       draw_tile(tile_array, red_checkers, blue_checkers, (i + 40) -
 		((i+40)/8)%2); // works, don't know why
     }
+    
+    player_checkers = &blue_checkers[0];
+    highlight_tile(x_highlight, y_highlight, player_turn, tile_selected);
+
     // for (uint8_t i=0; i < 8; i++){
     //   for (uint8_t j=0; j < 8; j++) {
     // 	highlight_tile(j , i, 'b', 1);
@@ -388,29 +458,73 @@ void loop()
 
     //   }
     // }
-    for (uint8_t i = 1; i < 13; i++){
-      populate_graveyard(i, 'r');
-      delay(200);
-      populate_graveyard(i, 'b');
-    }
-    turn_indicator('r');
-    delay(10000);
-    turn_indicator('b');
-    game_state = 4;
+    // for (uint8_t i = 1; i < 13; i++){
+    //   populate_graveyard(i, 'r');
+    //   delay(200);
+    //   populate_graveyard(i, 'b');
+    // }
+    // turn_indicator('r');
+    // delay(10000);
+    // turn_indicator('b');
+    game_state = PLAY_MODE;
   }
 
 
   else if (game_state == PLAY_MODE){
-    /*
-      if (red_death){
-        red_dead++;
-	populate_graveyard(red_dead, whose_turn);
-	
-	}
-     */
+    if (recompute_force_jumps){
+      // compute the moves
+      no_fjumps = compute_force_jumps(tile_array, player_checkers, 
+				      player_turn * (-1));
+      recompute_force_jumps = 0;
+    }
+    // set the highlight movement delay time
+    if (abs(joy_x) > 900 || abs(joy_y) > 900){ delay_time = 50;}
+  else { delay_time = 220; }
+
+  joy_x = joy_x / 400; // in range [-1, 1]
+  joy_y = joy_y / 400;
+  if ((joy_x != 0 || joy_y != 0) && !tile_selected) {
+    draw_tile(tile_array, red_checkers, blue_checkers, 
+	      coord_to_tile(x_highlight, y_highlight));
+    
+    if (joy_x <= -1) { // we've moved the joystick left
+      if (x_highlight != 0) {x_highlight--;}
+    }
+    if (joy_x >= 1) { // we've moved the joystick right
+      if (x_highlight != CBSQUARE_SIZE - 1) {x_highlight++;}
+    }
+    if (joy_y <= -1) { // we've moved the joystick up
+      if (y_highlight != 0) {y_highlight--;}
+    }
+    if (joy_y >= 1) { // we've moved the joystick down
+      if (y_highlight != CBSQUARE_SIZE - 1) {y_highlight++;}
+    }
+    if (!tile_selected){
+      highlight_tile(x_highlight, y_highlight, player_turn, tile_selected);
+      delay(delay_time);
+    }
   }
+    
+  if (digitalRead(JOYSTICK_BUTTON) == LOW){
+    if ((!tile_selected) && no_fjumps){
+      // check whether the piece we selected is on our team
+      if (tile_array[coord_to_tile(x_highlight, 
+				   y_highlight)].has_checker == player_turn){
 
-  else if (game_state == GAMEOVER_MODE){
-
+	tile_selected = 1;
+	highlight_tile(x_highlight, y_highlight, player_turn, tile_selected);
+      }
+      else if (!no_fjumps){
+	if (player_checkers[tile_array[coord_to_tile(x_highlight, 
+				    y_highlight)].checker_num].must_jump) {
+	  tile_selected = 1;
+	  highlight_tile(x_highlight, y_highlight, player_turn, tile_selected);
+	}
+      }
+    }
+    else if (!no_fjumps){}  
+    else {current_state_a = 0;}
+  }
+  else if (game_state == GAMEOVER_MODE){}
   }
 }
