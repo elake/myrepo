@@ -139,10 +139,10 @@ uint16_t delay_time = 100;
 uint8_t game_state = SETUP_MODE; // we need to set up the board
 uint8_t red_dead = 0;
 uint8_t blue_dead = 0;
-int8_t player_turn = 0;
-uint8_t recompute_force_jumps = 0;
+int8_t player_turn = TURN_BLUE;
+uint8_t recompute_force_jumps = 1;
 uint8_t current_state_a = 0; // debounce
-uint8_t no_fjumps = 0;
+uint8_t no_fjumps = 1;
 
 //*****************************************************************************
 //                             Sec0.3: Functions     
@@ -158,7 +158,10 @@ uint8_t coord_to_tile(uint8_t x, uint8_t y)
     y: the vertical tile
 
    */
+  if (0 <= x <= 7 || 0 <= y <= 7){
   return ((8*y) + x); // 8 - the number of tiles per row
+  }
+  return 0; // the index of the void tile
 }
 
 uint8_t* tile_to_coord(uint8_t tile_num)
@@ -246,7 +249,7 @@ void highlight_tile(uint8_t x, uint8_t y, int8_t turn, uint8_t sel)
   if (sel){
     color = ST7735_WHITE;
   }
-  else if (turn == -1){
+  else if (turn == TURN_RED){
     color = ST7735_RED;
   }
   else {
@@ -343,13 +346,19 @@ uint8_t* compute_checker_jumps(Tile* tile_array, Checker checker,
    
    */
   int8_t dir = opp_color;
-
   if (tile_array[coord_to_tile(checker.x_tile -1, 
 			     checker.y_tile - dir)].has_checker == opp_color) {
-    Serial.println("point a");
+    Serial.print("Checker's x_tile: ");
+    Serial.println(checker.x_tile);
+    Serial.print("Checker's y_tile: ");
+    Serial.println(checker.y_tile);
+    Serial.print("Top left has checker: ");
+    Serial.println(tile_array[coord_to_tile(checker.x_tile -1, 
+					   checker.y_tile - dir)].has_checker);
+    delay(10000);
     if (tile_array[coord_to_tile(checker.x_tile - 2,
 				   checker.y_tile - 2*dir)].has_checker == 0) {
-      Serial.println("point b");
+      Serial.println("Yes");
       checker.jumps[0] = coord_to_tile(checker.x_tile - 2, 
 				     checker.y_tile - 2*dir);
       checker.must_jump = 1;
@@ -357,10 +366,8 @@ uint8_t* compute_checker_jumps(Tile* tile_array, Checker checker,
   }
   if (tile_array[coord_to_tile(checker.x_tile + 1 , 
 			     checker.y_tile - dir)].has_checker == opp_color) {
-    Serial.println("point c");
     if (tile_array[coord_to_tile(checker.x_tile + 2,
 				 checker.y_tile - 2*dir)].has_checker == 0) {
-      Serial.println("point d");
       checker.jumps[1] = coord_to_tile(checker.x_tile + 2, 
 				     checker.y_tile - 2*dir);
       checker.must_jump = 1;
@@ -386,6 +393,8 @@ uint8_t* compute_checker_jumps(Tile* tile_array, Checker checker,
       }
     }
   }
+  Serial.print("checker must jump: ");
+  Serial.println(checker.must_jump);
 }
 
 uint8_t compute_jumps(Tile* tile_array, Checker* checkers, 
@@ -394,6 +403,10 @@ uint8_t compute_jumps(Tile* tile_array, Checker* checkers,
   uint8_t no_fjumps = 1;
   for (uint8_t i = 0; i < CHECKERS_PER_SIDE; i++){
     compute_checker_jumps(tile_array, checkers[i], opp_color);
+    Serial.print("checker[");
+    Serial.print(i);
+    Serial.print("] must jump: ");
+    Serial.println(checkers[i].must_jump);
     if (checkers[i].must_jump){
       no_fjumps = 0;
     }
@@ -448,7 +461,7 @@ void setup()
   joy_min_x = (((int32_t) joy_x) * JOY_REMAP_MAX) / (joy_x - VOLT_MAX);
   joy_min_y = (((int32_t) joy_y) * JOY_REMAP_MAX) / (joy_y - VOLT_MAX);
 
-
+  
 }
 
 //*****************************************************************************
@@ -466,7 +479,7 @@ void loop()
 
   if (game_state == SETUP_MODE){
     // Fill the red checker array
-    for (uint8_t i = 0; i < CHECKERS_PER_SIDE; i++) {	
+    for (uint8_t i = 1; i < CHECKERS_PER_SIDE; i++) {	
       uint8_t x_ti = (2*(i%4) + (((i/4) + 1)%2)); // fancy maths
       uint8_t y_ti = i/4;
       red_checkers[i].x_tile = x_ti;
@@ -475,6 +488,11 @@ void loop()
       tile_array[coord_to_tile(x_ti, y_ti)].has_checker = TURN_RED;
       tile_array[coord_to_tile(x_ti, y_ti)].checker_num = i;
     }
+    red_checkers[0].x_tile = 1;
+    red_checkers[0].y_tile = 4;
+    tile_array[coord_to_tile(red_checkers[0].x_tile, red_checkers[0].y_tile)].has_checker = TURN_RED;
+    tile_array[coord_to_tile(red_checkers[0].x_tile, red_checkers[0].y_tile)].checker_num = 0;
+    draw_tile(tile_array, red_checkers, blue_checkers, coord_to_tile(red_checkers[0].x_tile, red_checkers[0].y_tile));
 
     // Fill the blue checker array
     for (uint8_t i = 0; i < CHECKERS_PER_SIDE; i++) {
@@ -514,6 +532,7 @@ void loop()
     // delay(10000);
     // turn_indicator('b');
     game_state = PLAY_MODE;
+    tile_array[0].has_checker = 42;
   }
 
 
@@ -551,29 +570,30 @@ void loop()
       delay(delay_time);
     }
   }
-    
+  Serial.print("no_fjumps: ");
+  Serial.println(no_fjumps);
+  Serial.print("tile has checker: ");
+  Serial.println(tile_array[33].has_checker);
+  Serial.print("tile has checker no.: ");
+  Serial.println(tile_array[33].checker_num);
+  delay(1000);
   if (digitalRead(JOYSTICK_BUTTON) == LOW){
-    Serial.println(no_fjumps);
-    delay(500);
     if ((!tile_selected) && no_fjumps){
       // check whether the piece we selected is on our team
-      // Serial.println("!tile_selected && no_fjumps");
+ 
       if (tile_array[coord_to_tile(x_highlight, 
 				   y_highlight)].has_checker == player_turn){
-	// Serial.println("tile.has_checker == player_turn");
 
-	// tile_selected = 1;
+	 tile_selected = 1;
 	highlight_tile(x_highlight, y_highlight, player_turn, tile_selected);
-	delay(3000);
       }
     }
     else if (!no_fjumps){
-      // Serial.println("!no_fjumps");
       // check whether the selected piece must jump
       if (player_checkers[tile_array[coord_to_tile(x_highlight, 
 				       y_highlight)].checker_num].must_jump) {
-	Serial.println("checker must_jump");
-	// tile_selected = 1;
+	Serial.println("here");
+	 tile_selected = 1;
 	highlight_tile(x_highlight, y_highlight, player_turn, tile_selected);
       }
     }

@@ -11,7 +11,7 @@
  */
 
 typedef struct {
-  char has_checker;
+  int8_t has_checker;
   uint8_t checker_num;
 } Tile;
 
