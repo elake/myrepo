@@ -346,8 +346,10 @@ uint8_t* compute_checker_jumps(Tile* tile_array, Checker checker,
 
   if (tile_array[coord_to_tile(checker.x_tile -1, 
 			     checker.y_tile - dir)].has_checker == opp_color) {
+    Serial.println("point a");
     if (tile_array[coord_to_tile(checker.x_tile - 2,
 				   checker.y_tile - 2*dir)].has_checker == 0) {
+      Serial.println("point b");
       checker.jumps[0] = coord_to_tile(checker.x_tile - 2, 
 				     checker.y_tile - 2*dir);
       checker.must_jump = 1;
@@ -355,8 +357,10 @@ uint8_t* compute_checker_jumps(Tile* tile_array, Checker checker,
   }
   if (tile_array[coord_to_tile(checker.x_tile + 1 , 
 			     checker.y_tile - dir)].has_checker == opp_color) {
+    Serial.println("point c");
     if (tile_array[coord_to_tile(checker.x_tile + 2,
 				 checker.y_tile - 2*dir)].has_checker == 0) {
+      Serial.println("point d");
       checker.jumps[1] = coord_to_tile(checker.x_tile + 2, 
 				     checker.y_tile - 2*dir);
       checker.must_jump = 1;
@@ -517,7 +521,7 @@ void loop()
     if (recompute_force_jumps){
       // compute the moves
       no_fjumps = compute_jumps(tile_array, player_checkers, 
-				(-1) * player_turn)
+				(-1) * player_turn);
       recompute_force_jumps = 0;
     }
     // set the highlight movement delay time
@@ -549,20 +553,27 @@ void loop()
   }
     
   if (digitalRead(JOYSTICK_BUTTON) == LOW){
+    Serial.println(no_fjumps);
+    delay(500);
     if ((!tile_selected) && no_fjumps){
       // check whether the piece we selected is on our team
+      // Serial.println("!tile_selected && no_fjumps");
       if (tile_array[coord_to_tile(x_highlight, 
 				   y_highlight)].has_checker == player_turn){
+	// Serial.println("tile.has_checker == player_turn");
 
-	tile_selected = 1;
+	// tile_selected = 1;
 	highlight_tile(x_highlight, y_highlight, player_turn, tile_selected);
+	delay(3000);
       }
     }
     else if (!no_fjumps){
+      // Serial.println("!no_fjumps");
       // check whether the selected piece must jump
       if (player_checkers[tile_array[coord_to_tile(x_highlight, 
 				       y_highlight)].checker_num].must_jump) {
-	tile_selected = 1;
+	Serial.println("checker must_jump");
+	// tile_selected = 1;
 	highlight_tile(x_highlight, y_highlight, player_turn, tile_selected);
       }
     }
