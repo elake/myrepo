@@ -19,6 +19,10 @@
   Sec0.3: Functions
     Sub0.30: tile -> coordinate // coordinate -> tile maps
     Sub0.31: tile drawing procedure
+    Sub0.32: tile highlighting
+    Sub0.33: graveyard drawing
+    Sub0.34: turn indicator drawing
+    Sub0.35: jump and force jump computing
   Sec0.4: Arduino Setup Procedure
     Sub0.40: serial monitor & sd card preliminaries
     Sub0.41: drawing the checker board
@@ -181,7 +185,11 @@ void draw_tile(Tile* tile_array, Checker* red_checkers, Checker* blue_checkers,
     a checkers game, we can use the same vars for icol, scol and irow, srow,
     where:
 
+    tile_array: the address of the array of tiles.
     tile_index: the index of the tile in *tile_array to draw
+    red_checkers: the address of the red checker array
+    blue_checkers: the address of the blue checker array
+    
 
     uses globals: cb_img, tft, TILE_SIZE
         
@@ -191,7 +199,7 @@ void draw_tile(Tile* tile_array, Checker* red_checkers, Checker* blue_checkers,
   uint16_t row = (x_y[1] * TILE_SIZE) + BORDER_WIDTH;
 
   // draw over this tile with a symmetric tile depending on what 
-  // checker it contains:
+  // checker it contains, and, if it contains one, whether or not it's kinged:
   if (tile_array[tile_index].has_checker == 0){
     // draw the blank tile
     lcd_image_draw(&cb_img, &tft, col, row, col, row, TILE_SIZE, TILE_SIZE);
@@ -220,7 +228,7 @@ void draw_tile(Tile* tile_array, Checker* red_checkers, Checker* blue_checkers,
   }  
 }
 
-// Sub?: Tile highlighting
+// Sub0.32: tile highlighting
 void highlight_tile(uint8_t x, uint8_t y, int8_t turn, uint8_t sel)
 {
   /*
@@ -250,10 +258,24 @@ void highlight_tile(uint8_t x, uint8_t y, int8_t turn, uint8_t sel)
   tft.drawRect(col, row, TILE_SIZE, TILE_SIZE, color);
 }
 
+// Sub0.33: graveyard drawing
 void populate_graveyard(uint8_t num_dead, int8_t turn)
 {
+
+  /*
+    this function is called when a piece from either player dies, and puts the
+    corresponding death number into the graveyard at the bottom of the screen,
+    where:
+
+    num_dead: the number of checkers dead for either side
+    turn: whose turn it was when the checker died, so that a checker from the
+          opposite side is committed to the graveyard
+    
+    uses globals: cbg_image, tft
+
+  */
   // invariant: 1 <= num_dead <= 12
-  if (( num_dead < 1 || num_dead > 12)){
+  if (( num_dead < 1 || num_dead > CHECKERS_PER_SIDE)){
     Serial.println("You've called the populate graveyard function improperly");
     while(1) {} // loop until plug is pulled.
   }
@@ -280,8 +302,18 @@ void populate_graveyard(uint8_t num_dead, int8_t turn)
   }
 }
 
+// Sub0.34: turn indicator drawing
 void turn_indicator(int8_t turn)
 {
+  /*
+    this function is called to indicate on the lcd display whose turn it is,
+    and does so by coloring the border their respective color, where:
+
+    turn: whose turn we would like to indicate on screen
+
+    uses globals: cbr_image, cbb_image, tft
+   */
+
   if (turn == -1){
     lcd_image_draw(&cbr_image, &tft, 0, 0, 0, 0, SCREEN_WIDTH, BORDER_WIDTH);
     lcd_image_draw(&cbr_image, &tft, 0, 0, 0, 0, BORDER_WIDTH, SCREEN_WIDTH);
@@ -300,58 +332,69 @@ void turn_indicator(int8_t turn)
   }
 }
 
-uint8_t* check_jumps(Tile* tile_array, Checker checker,
-				 int8_t opp_color)
+//Sub0.35: jump and force jump computing
+uint8_t* compute_checker_jumps(Tile* tile_array, Checker checker,
+		     int8_t opp_color)
 {
-  uint8_t force_jumps[4] = {0,0,0,0};
-  
+  /*
+    this function checks the potential jumps of a given checker by checking
+    the two respective diagonal tiles it may have an opponent in (all four
+    if the checker is kinged) as well as the next diagonal space over
+   
+   */
+  int8_t dir = opp_color;
+
   if (tile_array[coord_to_tile(checker.x_tile -1, 
-			       checker.y_tile - 1)].has_checker == opp_color) {
+			     checker.y_tile - dir)].has_checker == opp_color) {
     if (tile_array[coord_to_tile(checker.x_tile - 2,
-				 checker.y_tile - 2)].has_checker == 0) {
-      force_jumps[0] = coord_to_tile(checker.x_tile - 2, checker.y_tile - 2);
+				   checker.y_tile - 2*dir)].has_checker == 0) {
+      checker.jumps[0] = coord_to_tile(checker.x_tile - 2, 
+				     checker.y_tile - 2*dir);
+      checker.must_jump = 1;
     }
   }
   if (tile_array[coord_to_tile(checker.x_tile + 1 , 
-			       checker.y_tile - 1)].has_checker == opp_color) {
+			     checker.y_tile - dir)].has_checker == opp_color) {
     if (tile_array[coord_to_tile(checker.x_tile + 2,
-				 checker.y_tile - 2)].has_checker == 0) {
-      force_jumps[1] = coord_to_tile(checker.x_tile + 2, checker.y_tile - 2);
+				 checker.y_tile - 2*dir)].has_checker == 0) {
+      checker.jumps[1] = coord_to_tile(checker.x_tile + 2, 
+				     checker.y_tile - 2*dir);
+      checker.must_jump = 1;
     }
   }
-  if (tile_array[coord_to_tile(checker.x_tile - 1, 
-			       checker.y_tile + 1)].has_checker == opp_color) {
-    if (tile_array[coord_to_tile(checker.x_tile - 2,
-				 checker.y_tile + 2)].has_checker == 0) {
-      force_jumps[2] = coord_to_tile(checker.x_tile - 2, checker.y_tile + 2);
+  if(checker.is_kinged){
+    if (tile_array[coord_to_tile(checker.x_tile - 1, 
+			     checker.y_tile + dir)].has_checker == opp_color) {
+      if (tile_array[coord_to_tile(checker.x_tile - 2,
+				   checker.y_tile + 2*dir)].has_checker == 0) {
+	checker.jumps[2] = coord_to_tile(checker.x_tile - 2, 
+				       checker.y_tile + 2*dir);
+	checker.must_jump = 1;
+      }
     }
-  }
-  if (tile_array[coord_to_tile(checker.x_tile + 1, 
-			       checker.y_tile + 1)].has_checker == opp_color) {
-    if (tile_array[coord_to_tile(checker.x_tile + 2,
-				 checker.y_tile + 2)].has_checker == 0) {
-      force_jumps[3] = coord_to_tile(checker.x_tile + 2, checker.y_tile + 2);
-    }
-  }
-  return force_jumps;
-}
-
-uint8_t compute_force_jumps(Tile* tile_array, Checker* checkers, 
-			    int8_t opp_color)
-{
-  uint8_t* force_jumps;
-  uint8_t no_force_jumps = 1;
-
-  for (uint8_t i = 0; i < CHECKERS_PER_SIDE; i++){
-    force_jumps = check_jumps(tile_array, checkers[i], opp_color);
-    for (uint8_t j = 0; i < 4; i++){
-      if (force_jumps[j] != 0) {
-	checkers[j].must_jump = 1;
-	no_force_jumps = 0;
+    if (tile_array[coord_to_tile(checker.x_tile + 1, 
+			     checker.y_tile + dir)].has_checker == opp_color) {
+      if (tile_array[coord_to_tile(checker.x_tile + 2,
+				   checker.y_tile + 2*dir)].has_checker == 0) {
+	checker.jumps[3] = coord_to_tile(checker.x_tile + 2, 
+				       checker.y_tile + 2*dir);
+	checker.must_jump = 1;
       }
     }
   }
-  return no_force_jumps;
+}
+
+uint8_t compute_jumps(Tile* tile_array, Checker* checkers, 
+			    int8_t opp_color)
+{
+  uint8_t no_fjumps = 1;
+  for (uint8_t i = 0; i < CHECKERS_PER_SIDE; i++){
+    compute_checker_jumps(tile_array, checkers[i], opp_color);
+    if (checkers[i].must_jump){
+      no_fjumps = 0;
+    }
+  }
+  return no_fjumps;
 }
 
 //*****************************************************************************
@@ -473,8 +516,8 @@ void loop()
   else if (game_state == PLAY_MODE){
     if (recompute_force_jumps){
       // compute the moves
-      no_fjumps = compute_force_jumps(tile_array, player_checkers, 
-				      player_turn * (-1));
+      no_fjumps = compute_jumps(tile_array, player_checkers, 
+				(-1) * player_turn)
       recompute_force_jumps = 0;
     }
     // set the highlight movement delay time
@@ -514,17 +557,19 @@ void loop()
 	tile_selected = 1;
 	highlight_tile(x_highlight, y_highlight, player_turn, tile_selected);
       }
-      else if (!no_fjumps){
-	if (player_checkers[tile_array[coord_to_tile(x_highlight, 
-				    y_highlight)].checker_num].must_jump) {
-	  tile_selected = 1;
-	  highlight_tile(x_highlight, y_highlight, player_turn, tile_selected);
-	}
+    }
+    else if (!no_fjumps){
+      // check whether the selected piece must jump
+      if (player_checkers[tile_array[coord_to_tile(x_highlight, 
+				       y_highlight)].checker_num].must_jump) {
+	tile_selected = 1;
+	highlight_tile(x_highlight, y_highlight, player_turn, tile_selected);
       }
     }
-    else if (!no_fjumps){}  
-    else {current_state_a = 0;}
+  }
+  else if (!no_fjumps){}  
+  else {current_state_a = 0;}
   }
   else if (game_state == GAMEOVER_MODE){}
-  }
 }
+
