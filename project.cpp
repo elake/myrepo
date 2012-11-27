@@ -150,6 +150,7 @@ uint8_t recompute_force_jumps = 1;
 uint8_t current_state_a = 0; // debounce
 uint8_t no_fjumps = 1;
 uint8_t move_ok = 0;
+uint8_t bouncer = 1;
 
 //*****************************************************************************
 //                             Sec0.3: Functions     
@@ -508,6 +509,19 @@ uint8_t check_can_move(Checker* active_checker)
   return matches;
 }			    
 
+void move_piece(Tile* tile_array, Checker* active_checker, 
+		uint8_t active_tile, uint8_t destination_tile)
+{
+  tile_array[destination_tile].has_checker = 
+    tile_array[active_tile].has_checker;
+
+  tile_array[active_tile].has_checker = 0;
+  
+  uint8_t* x_y = tile_to_coord(destination_tile);
+  active_checker->x_tile = x_y[0];
+  active_checker->y_tile = x_y[1];
+}
+
 //*****************************************************************************
 //                          Sec?: Setup Procedure     
 //*****************************************************************************
@@ -637,7 +651,6 @@ void loop()
     if (recompute_force_jumps){
       // compute the moves
 
-      recompute_force_jumps = 0;
       for (int i = 0; i < CHECKERS_PER_SIDE; i++){
 	for (int j = 0; j < 4; j++){
 	  player_checkers[i].moves[j] = 0;
@@ -646,6 +659,7 @@ void loop()
       }
       no_fjumps = compute_moves(tile_array, player_checkers, 
 				(-1) * player_turn);
+      recompute_force_jumps = 0;
     }
     // set the highlight movement delay time
     if (abs(joy_x) > 900 || abs(joy_y) > 900){ delay_time = 50; }
@@ -711,31 +725,33 @@ void loop()
   // Serial.println(tile_array[33].checker_num);
   // delay(1000);
   if (digitalRead(JOYSTICK_BUTTON) == LOW){
-    delay(150);
+    delay(500);
     if (tile_selected) {
       move_ok = selection_matches_move(subtile_highlighted, &active_checker, 
 				       no_fjumps);
       if (move_ok){
-	// handle moving
-	
+	move_piece(tile_array, &active_checker, tile_highlighted, 
+		   subtile_highlighted);
       }
-      else {
-	tile_selected = 0;
-	draw_tile(tile_array, red_checkers, blue_checkers, tile_highlighted);
-	for (uint8_t i = 0; i < 4; i++){
-	  draw_tile(tile_array, red_checkers, blue_checkers, 
-		    active_checker.moves[i]);
-	  draw_tile(tile_array, red_checkers, blue_checkers, 
-		    active_checker.jumps[i]);
-	}
+      else { tile_selected = 0; }
+
+      draw_tile(tile_array, red_checkers, blue_checkers, tile_highlighted);
+      for (uint8_t i = 0; i < 4; i++){
+	draw_tile(tile_array, red_checkers, blue_checkers, 
+		  active_checker.moves[i]);
+	draw_tile(tile_array, red_checkers, blue_checkers, 
+		  active_checker.jumps[i]);
+      }
+
 	tile_highlighted = subtile_highlighted;
       }
-    }
     active_checker = 
       player_checkers[tile_array[tile_highlighted].checker_num];
     checker_owned = (tile_array[tile_highlighted].has_checker == player_turn);
     checker_must_jump = (player_checkers[tile_array[
 				     tile_highlighted].checker_num].must_jump);
+    recompute_force_jumps = 1;
+
     
     if ((!tile_selected) && no_fjumps && check_can_move(&active_checker)){
       // check whether the piece we selected is on our team
