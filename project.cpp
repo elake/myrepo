@@ -90,6 +90,8 @@ const uint8_t NUM_TILES = 64; // standard 8x8 board
 #define SETUP_MODE 0
 #define PLAY_MODE 1
 #define GAMEOVER_MODE 2
+#define HIGHLIGHT_MOVES 3
+#define HIGHLIGHT_JUMPS 4
 
 //*****************************************************************************
 //                   Sec0.2: Non-Constant Globals and Cache Data     
@@ -130,10 +132,11 @@ int joy_min_x;       // remap minima for the x and
 int joy_min_y;       // y readings from the joystick
 
 // Sub?: tile highlighting
-uint8_t x_highlight = 4; // the x, y tile highlighted 
-uint8_t y_highlight = 4;
+uint8_t tile_highlighted = 36;
 uint8_t tile_selected = 0; // whether we have selected a tile
 uint16_t delay_time = 100;
+bool checker_owned;
+bool checker_must_jump;
 
 // Sub?: game state
 uint8_t game_state = SETUP_MODE; // we need to set up the board
@@ -158,10 +161,10 @@ uint8_t coord_to_tile(uint8_t x, uint8_t y)
     y: the vertical tile
 
    */
-  if (0 <= x <= 7 || 0 <= y <= 7){
-  return ((8*y) + x); // 8 - the number of tiles per row
+  if (x < 0 || x > 7 || y < 0 || y > 7){
+    return 0;
   }
-  return 0; // the index of the void tile
+  return ((8*y) + x);
 }
 
 uint8_t* tile_to_coord(uint8_t tile_num)
@@ -232,14 +235,14 @@ void draw_tile(Tile* tile_array, Checker* red_checkers, Checker* blue_checkers,
 }
 
 // Sub0.32: tile highlighting
-void highlight_tile(uint8_t x, uint8_t y, int8_t turn, uint8_t sel)
+void highlight_tile(uint8_t tile_num, int8_t mode, uint8_t sel)
 {
   /*
     draw a rect around the tile given by the x, y coordinates, with color 
     dependent on whose turn it is and whether the tile has been highlighted,
     where:
     x, y: the x, y tile to highlight
-    turn: whose turn it is (-1, 1)
+    mode: what mode to highlight the tile in
     sel: whether the tile has been selected
 
     Uses consts: BORDER_WIDTH, TILE_SIZE
@@ -249,14 +252,21 @@ void highlight_tile(uint8_t x, uint8_t y, int8_t turn, uint8_t sel)
   if (sel){
     color = ST7735_WHITE;
   }
-  else if (turn == TURN_RED){
+  else if (mode == TURN_RED){
     color = ST7735_RED;
   }
-  else {
+  else if (mode == TURN_BLUE){
     color = ST7735_BLUE;
   }
-  uint8_t col = BORDER_WIDTH + (TILE_SIZE * x);
-  uint8_t row = BORDER_WIDTH + (TILE_SIZE * y);
+  else if (mode == HIGHLIGHT_MOVES){
+    color = ST7735_GREEN;
+  }
+  else if (mode == HIGHLIGHT_JUMPS){
+    color = 0xFF7715;
+  }
+  uint8_t* x_y = tile_to_coord(tile_num);
+  uint8_t col = BORDER_WIDTH + (TILE_SIZE * x_y[0]);
+  uint8_t row = BORDER_WIDTH + (TILE_SIZE * x_y[1]);
   
   tft.drawRect(col, row, TILE_SIZE, TILE_SIZE, color);
 }
@@ -336,7 +346,7 @@ void turn_indicator(int8_t turn)
 }
 
 //Sub0.35: jump and force jump computing
-uint8_t* compute_checker_jumps(Tile* tile_array, Checker checker,
+uint8_t* compute_checker_jumps(Tile* tile_array, Checker* checker,
 		     int8_t opp_color)
 {
   /*
@@ -346,73 +356,98 @@ uint8_t* compute_checker_jumps(Tile* tile_array, Checker checker,
    
    */
   int8_t dir = opp_color;
-  if (tile_array[coord_to_tile(checker.x_tile -1, 
-			     checker.y_tile - dir)].has_checker == opp_color) {
-    Serial.print("Checker's x_tile: ");
-    Serial.println(checker.x_tile);
-    Serial.print("Checker's y_tile: ");
-    Serial.println(checker.y_tile);
-    Serial.print("Top left has checker: ");
-    Serial.println(tile_array[coord_to_tile(checker.x_tile -1, 
-					   checker.y_tile - dir)].has_checker);
-    delay(10000);
-    if (tile_array[coord_to_tile(checker.x_tile - 2,
-				   checker.y_tile - 2*dir)].has_checker == 0) {
-      Serial.println("Yes");
-      checker.jumps[0] = coord_to_tile(checker.x_tile - 2, 
-				     checker.y_tile - 2*dir);
-      checker.must_jump = 1;
+  if (tile_array[coord_to_tile(checker->x_tile -1, 
+			    checker->y_tile - dir)].has_checker == opp_color) {
+    // Serial.print("Checker's x_tile: ");
+    // Serial.println(checker->x_tile);
+    // Serial.print("Checker's y_tile: ");
+    // Serial.println(checker->y_tile);
+    // Serial.print("Top left has checker: ");
+    // Serial.println(tile_array[coord_to_tile(checker->x_tile -1, 
+    // 					  checker->y_tile - dir)].has_checker);
+    // delay(10000);
+    if (tile_array[coord_to_tile(checker->x_tile - 2,
+				  checker->y_tile - 2*dir)].has_checker == 0) {
+      // Serial.println("Yes");
+      checker->jumps[0] = coord_to_tile(checker->x_tile - 2, 
+				     checker->y_tile - 2*dir);
+      checker->must_jump = 1;
     }
   }
-  if (tile_array[coord_to_tile(checker.x_tile + 1 , 
-			     checker.y_tile - dir)].has_checker == opp_color) {
-    if (tile_array[coord_to_tile(checker.x_tile + 2,
-				 checker.y_tile - 2*dir)].has_checker == 0) {
-      checker.jumps[1] = coord_to_tile(checker.x_tile + 2, 
-				     checker.y_tile - 2*dir);
-      checker.must_jump = 1;
+  if (tile_array[coord_to_tile(checker->x_tile + 1 , 
+			    checker->y_tile - dir)].has_checker == opp_color) {
+    if (tile_array[coord_to_tile(checker->x_tile + 2,
+				 checker->y_tile - 2*dir)].has_checker == 0) {
+      checker->jumps[1] = coord_to_tile(checker->x_tile + 2, 
+				     checker->y_tile - 2*dir);
+      checker->must_jump = 1;
     }
   }
-  if(checker.is_kinged){
-    if (tile_array[coord_to_tile(checker.x_tile - 1, 
-			     checker.y_tile + dir)].has_checker == opp_color) {
-      if (tile_array[coord_to_tile(checker.x_tile - 2,
-				   checker.y_tile + 2*dir)].has_checker == 0) {
-	checker.jumps[2] = coord_to_tile(checker.x_tile - 2, 
-				       checker.y_tile + 2*dir);
-	checker.must_jump = 1;
+  if(checker->is_kinged){
+    if (tile_array[coord_to_tile(checker->x_tile - 1, 
+			    checker->y_tile + dir)].has_checker == opp_color) {
+      if (tile_array[coord_to_tile(checker->x_tile - 2,
+				  checker->y_tile + 2*dir)].has_checker == 0) {
+	checker->jumps[2] = coord_to_tile(checker->x_tile - 2, 
+				       checker->y_tile + 2*dir);
+	checker->must_jump = 1;
       }
     }
-    if (tile_array[coord_to_tile(checker.x_tile + 1, 
-			     checker.y_tile + dir)].has_checker == opp_color) {
-      if (tile_array[coord_to_tile(checker.x_tile + 2,
-				   checker.y_tile + 2*dir)].has_checker == 0) {
-	checker.jumps[3] = coord_to_tile(checker.x_tile + 2, 
-				       checker.y_tile + 2*dir);
-	checker.must_jump = 1;
+    if (tile_array[coord_to_tile(checker->x_tile + 1, 
+			    checker->y_tile + dir)].has_checker == opp_color) {
+      if (tile_array[coord_to_tile(checker->x_tile + 2,
+				  checker->y_tile + 2*dir)].has_checker == 0) {
+	checker->jumps[3] = coord_to_tile(checker->x_tile + 2, 
+				       checker->y_tile + 2*dir);
+	checker->must_jump = 1;
       }
     }
   }
-  Serial.print("checker must jump: ");
-  Serial.println(checker.must_jump);
 }
 
-uint8_t compute_jumps(Tile* tile_array, Checker* checkers, 
+void compute_checker_moves(Tile* tile_array, Checker* checker, 
+			   int8_t opp_color)
+{
+  int8_t dir = opp_color;
+  if (tile_array[coord_to_tile(checker->x_tile -1, 
+			    checker->y_tile - dir)].has_checker == 0) {
+    checker->moves[0] = coord_to_tile(checker->x_tile -1, checker->y_tile - 
+				      dir);
+  }
+  if (tile_array[coord_to_tile(checker->x_tile + 1 , 
+			   checker->y_tile - dir)].has_checker == 0) {
+    checker->moves[1] = coord_to_tile(checker->x_tile + 1, checker->y_tile - 
+				      dir);
+  }
+  if(checker->is_kinged){
+    if (tile_array[coord_to_tile(checker->x_tile - 1, 
+			    checker->y_tile + dir)].has_checker == 0) {
+      checker->moves[2] = coord_to_tile(checker->x_tile - 1, checker->y_tile +
+					dir);
+    }
+    if (tile_array[coord_to_tile(checker->x_tile + 1, 
+			   checker->y_tile + dir)].has_checker == 0) {
+      checker->moves[3] = coord_to_tile(checker->x_tile + 1, checker->y_tile +
+					dir);
+    }
+  }
+}
+
+uint8_t compute_moves(Tile* tile_array, Checker* checkers, 
 			    int8_t opp_color)
 {
   uint8_t no_fjumps = 1;
   for (uint8_t i = 0; i < CHECKERS_PER_SIDE; i++){
-    compute_checker_jumps(tile_array, checkers[i], opp_color);
-    Serial.print("checker[");
-    Serial.print(i);
-    Serial.print("] must jump: ");
-    Serial.println(checkers[i].must_jump);
+    compute_checker_moves(tile_array, &checkers[i], opp_color);
+    compute_checker_jumps(tile_array, &checkers[i], opp_color);
     if (checkers[i].must_jump){
       no_fjumps = 0;
     }
   }
   return no_fjumps;
 }
+
+// void highlight_moves(Tile* tile_array, uint8_t tile_num, 
 
 //*****************************************************************************
 //                          Sec?: Setup Procedure     
@@ -479,6 +514,9 @@ void loop()
 
   if (game_state == SETUP_MODE){
     // Fill the red checker array
+    for (uint8_t i = 1; i < NUM_TILES; i++){
+      tile_array[i].has_checker = 0;
+    }
     for (uint8_t i = 1; i < CHECKERS_PER_SIDE; i++) {	
       uint8_t x_ti = (2*(i%4) + (((i/4) + 1)%2)); // fancy maths
       uint8_t y_ti = i/4;
@@ -512,7 +550,7 @@ void loop()
     }
     
     player_checkers = &blue_checkers[0];
-    highlight_tile(x_highlight, y_highlight, player_turn, tile_selected);
+    highlight_tile(tile_highlighted, player_turn, tile_selected);
 
     // for (uint8_t i=0; i < 8; i++){
     //   for (uint8_t j=0; j < 8; j++) {
@@ -539,12 +577,19 @@ void loop()
   else if (game_state == PLAY_MODE){
     if (recompute_force_jumps){
       // compute the moves
-      no_fjumps = compute_jumps(tile_array, player_checkers, 
+      no_fjumps = compute_moves(tile_array, player_checkers, 
 				(-1) * player_turn);
       recompute_force_jumps = 0;
+      for (int i = 0; i < 12; i++){
+	Serial.print("checker["); Serial.print(i); Serial.print("]s moves:");
+	for (int j = 0; j < 4; j++){
+	  Serial.print(player_checkers[i].moves[j]); Serial.print(", ");
+	}
+	Serial.println();
+      }
     }
     // set the highlight movement delay time
-    if (abs(joy_x) > 900 || abs(joy_y) > 900){ delay_time = 50;}
+    if (abs(joy_x) > 900 || abs(joy_y) > 900){ delay_time = 50; }
   else { delay_time = 220; }
 
   joy_x = joy_x / 400; // in range [-1, 1]
@@ -554,53 +599,58 @@ void loop()
 	      coord_to_tile(x_highlight, y_highlight));
     
     if (joy_x <= -1) { // we've moved the joystick left
-      if (x_highlight != 0) {x_highlight--;}
+      if (!(tile_highlighted % 8)) {tile_highlighted--;}
     }
     if (joy_x >= 1) { // we've moved the joystick right
-      if (x_highlight != CBSQUARE_SIZE - 1) {x_highlight++;}
+      if (!(tile_highlighted % 7)) {tile_highlighted++;}
     }
     if (joy_y <= -1) { // we've moved the joystick up
-      if (y_highlight != 0) {y_highlight--;}
+      if (tile_highlighted/8) {tile_highlighted -= 8;}
     }
     if (joy_y >= 1) { // we've moved the joystick down
-      if (y_highlight != CBSQUARE_SIZE - 1) {y_highlight++;}
+      if ((tile_highlighted/8) < 7) {tile_highlighted+=8;}
     }
     if (!tile_selected){
-      highlight_tile(x_highlight, y_highlight, player_turn, tile_selected);
+      highlight_tile(tile_highlighted, player_turn, tile_selected);
       delay(delay_time);
     }
   }
-  Serial.print("no_fjumps: ");
-  Serial.println(no_fjumps);
-  Serial.print("tile has checker: ");
-  Serial.println(tile_array[33].has_checker);
-  Serial.print("tile has checker no.: ");
-  Serial.println(tile_array[33].checker_num);
-  delay(1000);
+  else if (tile_selected){
+    
+  }
+  // Serial.print("no_fjumps: ");
+  // Serial.println(no_fjumps);
+  // Serial.print("tile has checker: ");
+  // Serial.println(tile_array[33].has_checker);
+  // Serial.print("tile has checker no.: ");
+  // Serial.println(tile_array[33].checker_num);
+  // delay(1000);
   if (digitalRead(JOYSTICK_BUTTON) == LOW){
+    checker_owned = (tile_array[coord_to_tile(x_highlight, 
+				    y_highlight)].has_checker == player_turn);
+    checker_must_jump = (player_checkers[tile_array[coord_to_tile(
+			    x_highlight, y_highlight)].checker_num].must_jump);
     if ((!tile_selected) && no_fjumps){
       // check whether the piece we selected is on our team
- 
-      if (tile_array[coord_to_tile(x_highlight, 
-				   y_highlight)].has_checker == player_turn){
-
-	 tile_selected = 1;
-	highlight_tile(x_highlight, y_highlight, player_turn, tile_selected);
+      if (checker_owned){
+	tile_selected = 1;
+	highlight_tile(tile_highlighted, player_turn, tile_selected);
+	// highlight_moves(, y_highlight, player_checkers);
       }
     }
     else if (!no_fjumps){
       // check whether the selected piece must jump
-      if (player_checkers[tile_array[coord_to_tile(x_highlight, 
-				       y_highlight)].checker_num].must_jump) {
-	Serial.println("here");
-	 tile_selected = 1;
-	highlight_tile(x_highlight, y_highlight, player_turn, tile_selected);
+      if (checker_owned && checker_must_jump) {
+	tile_selected = 1;
+	highlight_tile(tile_highlighted, player_turn, tile_selected);
       }
     }
   }
   else if (!no_fjumps){}  
   else {current_state_a = 0;}
   }
+
+
   else if (game_state == GAMEOVER_MODE){}
 }
 

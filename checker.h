@@ -18,6 +18,7 @@ typedef struct {
   uint8_t in_play;
   uint8_t must_jump;
   uint8_t jumps[4];
+  uint8_t moves[4];
 } Checker;
 
 #endif
