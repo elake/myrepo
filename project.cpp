@@ -42,6 +42,7 @@
 #include <SPI.h>
 #include <SD.h>
 #include <stdlib.h>
+#include "TimerThree.h"
 #include "mem_syms.h"
 #include "tile.h"
 #include "checker.h"
@@ -92,6 +93,7 @@ const uint8_t NUM_TILES = 64; // standard 8x8 board
 #define GAMEOVER_MODE 2
 #define HIGHLIGHT_MOVES 3
 #define HIGHLIGHT_JUMPS 4
+#define BOUNCE_PERIOD 1000000
 
 //*****************************************************************************
 //                   Sec0.2: Non-Constant Globals and Cache Data     
@@ -522,6 +524,11 @@ void move_piece(Tile* tile_array, Checker* active_checker,
   active_checker->y_tile = x_y[1];
 }
 
+void bouncer_reset()
+{
+  bouncer = 1;
+}
+
 //*****************************************************************************
 //                          Sec?: Setup Procedure     
 //*****************************************************************************
@@ -569,7 +576,8 @@ void setup()
   joy_min_x = (((int32_t) joy_x) * JOY_REMAP_MAX) / (joy_x - VOLT_MAX);
   joy_min_y = (((int32_t) joy_y) * JOY_REMAP_MAX) / (joy_y - VOLT_MAX);
 
-  
+  Timer3.initialize();
+  Timer3.attachInterrupt(bouncer_reset, BOUNCE_PERIOD);
 }
 
 //*****************************************************************************
@@ -724,8 +732,8 @@ void loop()
   // Serial.print("tile has checker no.: ");
   // Serial.println(tile_array[33].checker_num);
   // delay(1000);
-  if (digitalRead(JOYSTICK_BUTTON) == LOW){
-    delay(500);
+  if (digitalRead(JOYSTICK_BUTTON) == LOW && bouncer){
+    bouncer = 0;
     if (tile_selected) {
       move_ok = selection_matches_move(subtile_highlighted, &active_checker, 
 				       no_fjumps);
