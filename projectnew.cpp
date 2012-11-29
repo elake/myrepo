@@ -85,6 +85,8 @@ const uint8_t NUM_TILES = 64; // standard 8x8 board
 #define JOYSTICK_VERT  1    // Analog input A1 - vertical
 #define JOYSTICK_BUTTON 9   // Digitial input pin 9 for the button
 
+#define DEBUG_BUTTON 10
+
 // Sub0.15: mode mapping
 #define TURN_RED 1
 #define TURN_BLUE -1
@@ -472,7 +474,7 @@ uint8_t compute_moves(Tile* tile_array, Checker* checkers,
 void highlight_moves(Checker* active_checker)
 {
   for (uint8_t i = 0; i < 4; i++){
-    if (active_checker->moves[i]){
+    if (active_checker->moves[i] != 64){
       highlight_tile(active_checker->moves[i], MOVE_HIGHLIGHT);
     }
   }
@@ -480,7 +482,7 @@ void highlight_moves(Checker* active_checker)
 void highlight_jumps(Checker* active_checker)
 {
   for (uint8_t i = 0; i < 4; i++){
-    if (active_checker->jumps[i]){
+    if (active_checker->jumps[i] != 64){
       highlight_tile(active_checker->jumps[i], JUMP_HIGHLIGHT);
     }
   }
@@ -512,7 +514,7 @@ uint8_t check_can_move(Checker* active_checker)
 
   for (uint8_t i = 0; i < 4; i++){
 
-    if (active_checker->moves[i]){
+    if (active_checker->moves[i] != 64){
       matches = 1;
     }
   }
@@ -524,7 +526,7 @@ uint8_t check_must_jump(Checker* active_checker)
 {
   uint8_t matches = 0;
   for (uint8_t i = 0; i < 4; i++){
-    if (active_checker->jumps[i]){
+    if (active_checker->jumps[i] != 64){
       matches = 1;
     }
   }
@@ -535,7 +537,7 @@ void clear_draw(Tile* tile_array, Checker* active_checker,
 		Checker* red_checkers, Checker* blue_checkers, 
 		uint8_t active_tile, uint8_t destination_tile) 
 {
-  uint8_t rm_tile = (active_tile / 2) + (destination_tile / 2);
+  uint8_t rm_tile = (active_tile + destination_tile) / 2;
 
   draw_tile(tile_array, red_checkers, blue_checkers, active_tile);
   draw_tile(tile_array, red_checkers, blue_checkers, destination_tile);
@@ -590,19 +592,27 @@ void jump_checker(Tile* tile_array, Checker* active_checker,
   tile_array[active_tile].has_checker = 0;
   tile_array[active_tile].checker_num = 13;
   
-  int rm_tile = ( active_tile / 2 ) + ( destination_tile / 2);
+  int rm_tile =  (active_tile + destination_tile) / 2;
 
   uint8_t* x_y = tile_to_coord(destination_tile);
   active_checker->x_tile = x_y[0];
   active_checker->y_tile = x_y[1];
 
   tile_array[rm_tile].has_checker = 0;
-  tile_array[rm_tile].has_checker = 13;
+  tile_array[rm_tile].checker_num = 13;
   if (turn == TURN_RED) {
     red_checkers[tile_array[rm_tile].checker_num].in_play = 0;
+    for (uint8_t i = 0; i < 4; i++){
+      red_checkers[tile_array[rm_tile].checker_num].moves[i] = 64;
+      red_checkers[tile_array[rm_tile].checker_num].jumps[i] = 64;
+    }
   }
   else {
     blue_checkers[tile_array[rm_tile].checker_num].in_play = 0;
+    for (uint8_t i = 0; i < 4; i++){
+      blue_checkers[tile_array[rm_tile].checker_num].moves[i] = 64;
+      blue_checkers[tile_array[rm_tile].checker_num].jumps[i] = 64;
+    }
   }
   
   clear_draw(tile_array, active_checker, red_checkers, blue_checkers,
@@ -653,20 +663,71 @@ void print_board_data(Tile* tile_array){
     if( !(i%8) ){
       Serial.print("*");
     }
-    if(tile_array[i].has_checker == 0 || tile_array[i].has_checker == 42){
+    if(tile_array[i].has_checker == 0){
       Serial.print("0");
     }
-    if(tile_array[i].has_checker == 1){
+    else if(tile_array[i].has_checker == 1){
       Serial.print("R");
     }
-    if(tile_array[i].has_checker == -1){
+    else if(tile_array[i].has_checker == -1){
       Serial.print("B");
     }
+    else {Serial.print("0");}
     if( !((i+1) % 8)){
       Serial.println("*");
     }
   }
   Serial.println("**********");
+  Serial.println(no_fjumps);
+
+  Serial.println("RED:");
+  for (int i = 0 ; i < CHECKERS_PER_SIDE; i++){
+    Serial.print("checker["); Serial.print(i); Serial.print("]s moves: ");
+    for (int j = 0; j < 4; j++) {
+      Serial.print(red_checkers[i].moves[j]); Serial.print(", ");
+    }
+    Serial.print("  location: ("); Serial.print(red_checkers[i].x_tile);
+    Serial.print(", "); Serial.print(red_checkers[i].y_tile); 
+    Serial.print(" ) ");
+    Serial.println();
+  }
+  for (int i = 0 ; i < CHECKERS_PER_SIDE; i++){
+
+    Serial.println("RED:");
+    Serial.print("checker["); Serial.print(i); Serial.print("]s jumps: ");
+    for (int j = 0; j < 4; j++) {
+      Serial.print(red_checkers[i].jumps[j]); Serial.print(", ");
+    }
+    Serial.print("  location: ("); Serial.print(red_checkers[i].x_tile);
+    Serial.print(", "); Serial.print(red_checkers[i].y_tile); 
+    Serial.print(" ) ");
+    Serial.println();
+  }
+  for (int i = 0 ; i < CHECKERS_PER_SIDE; i++){
+    Serial.println("BLUE:");
+    Serial.print("checker["); Serial.print(i); Serial.print("]s moves: ");
+    for (int j = 0; j < 4; j++) {
+      Serial.print(blue_checkers[i].moves[j]); Serial.print(", ");
+    }
+    Serial.print("  location: ("); Serial.print(blue_checkers[i].x_tile);
+    Serial.print(", "); Serial.print(blue_checkers[i].y_tile); 
+    Serial.print(" ) ");
+    Serial.println();
+  }
+  for (int i = 0 ; i < CHECKERS_PER_SIDE; i++){
+
+    Serial.println();
+    Serial.println("BLUE:");
+    Serial.print("checker["); Serial.print(i); Serial.print("]s jumps: ");
+    for (int j = 0; j < 4; j++) {
+      Serial.print(blue_checkers[i].jumps[j]); Serial.print(", ");
+    }
+    Serial.print("  location: ("); Serial.print(blue_checkers[i].x_tile);
+    Serial.print(", "); Serial.print(blue_checkers[i].y_tile); 
+    Serial.print(" ) ");
+    Serial.println();
+    Serial.println();
+  }
 }
 
 //*****************************************************************************
@@ -705,6 +766,8 @@ void setup()
   pinMode(JOYSTICK_BUTTON, INPUT);     // tell arduino to read joybutton inputs
   digitalWrite(JOYSTICK_BUTTON, HIGH); // button presses set voltage to LOW!!
 
+  pinMode(DEBUG_BUTTON, INPUT);
+  digitalWrite(DEBUG_BUTTON, HIGH);
 
   // Sub0.44: calibrate the joystick
   joy_x = analogRead(JOYSTICK_HORIZ); // the joystick must be in NEUTRAL 
@@ -813,8 +876,8 @@ void loop()
 	// assume all previous moves are now invalid
 	player_checkers[i].must_jump = 0;
 	for (int j = 0; j < 4; j++){
-	  player_checkers[i].moves[j] = 0;
-	  player_checkers[i].jumps[j] = 0;
+	  player_checkers[i].moves[j] = 64; // 64 is not a tile, void status
+	  player_checkers[i].jumps[j] = 64;
 	}
       }
       
@@ -933,7 +996,7 @@ void loop()
       bouncer = 0; // debounce
     } // end button press if
 
-    else if (game_state == GAMEOVER_MODE){}
+    else if (digitalRead(DEBUG_BUTTON) == LOW){print_board_data(tile_array);}
   }
 }
 
