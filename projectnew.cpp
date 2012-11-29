@@ -331,9 +331,7 @@ void populate_graveyard(uint8_t num_dead, int8_t turn)
 }
 
 // Sub0.34: turn indicator drawing
-void change_turn(int8_t* turn, uint8_t* player_dead, 
-		 Checker* player_checkers, Checker* red_checkers, 
-		 Checker* blue_checkers, uint8_t* red_dead, uint8_t* blue_dead)
+void change_turn()
 {
   /*
     this function is called to indicate on the lcd display whose turn it is,
@@ -343,13 +341,11 @@ void change_turn(int8_t* turn, uint8_t* player_dead,
 
     uses globals: cbr_image, cbb_image, tft
    */
-  Serial.print("old turn: "); Serial.println(*turn);
-  (*turn) = (-1) * (*turn);
-  Serial.print("new turn: "); Serial.println(*turn);
+  player_turn = (-1) * player_turn;
 
-  if ((*turn) == TURN_RED){
-    player_checkers = &red_checkers[0];
-    player_dead = red_dead;
+  if (player_turn == TURN_RED){
+    player_checkers = red_checkers;
+    player_dead = &red_dead;
     lcd_image_draw(&cbr_image, &tft, 0, 0, 0, 0, SCREEN_WIDTH, BORDER_WIDTH);
     lcd_image_draw(&cbr_image, &tft, 0, 0, 0, 0, BORDER_WIDTH, SCREEN_WIDTH);
     lcd_image_draw(&cbr_image, &tft, SCREEN_WIDTH - BORDER_WIDTH, 0, 
@@ -358,8 +354,8 @@ void change_turn(int8_t* turn, uint8_t* player_dead,
 		   SCREEN_WIDTH - BORDER_WIDTH, SCREEN_WIDTH, BORDER_WIDTH);
   }
   else {
-    player_checkers = &blue_checkers[0];
-    player_dead = blue_dead;
+    player_checkers = blue_checkers;
+    player_dead = &blue_dead;
     lcd_image_draw(&cbb_image, &tft, 0, 0, 0, 0, SCREEN_WIDTH, BORDER_WIDTH);
     lcd_image_draw(&cbb_image, &tft, 0, 0, 0, 0, BORDER_WIDTH, SCREEN_WIDTH);
     lcd_image_draw(&cbb_image, &tft, SCREEN_WIDTH - BORDER_WIDTH, 0, 
@@ -462,10 +458,12 @@ uint8_t compute_moves(Tile* tile_array, Checker* checkers,
 {
   uint8_t no_fjumps = 1;
   for (uint8_t i = 0; i < CHECKERS_PER_SIDE; i++){
-    compute_checker_moves(tile_array, &checkers[i], opp_color);
-    compute_checker_jumps(tile_array, &checkers[i], opp_color);
-    if (checkers[i].must_jump){
-      no_fjumps = 0;
+    if (checkers[i].in_play){
+      compute_checker_moves(tile_array, &checkers[i], opp_color);
+      compute_checker_jumps(tile_array, &checkers[i], opp_color);
+      if (checkers[i].must_jump){
+	no_fjumps = 0;
+      }
     }
   }
   return no_fjumps;
@@ -564,13 +562,16 @@ void move_checker(Tile* tile_array, Checker* active_checker,
     tile_array[active_tile].checker_num;
 
   tile_array[active_tile].has_checker = 0;
+  tile_array[active_tile].checker_num = 13;
   
   clear_draw(tile_array, active_checker, red_checkers, blue_checkers,
 	     active_tile, destination_tile);
 
   uint8_t* x_y = tile_to_coord(destination_tile);
+
   active_checker->x_tile = x_y[0];
   active_checker->y_tile = x_y[1];
+
   
   // clear_draw(tile_array, active_checker, red_checkers, blue_checkers, 
   // 	     active_tile, destination_tile);
@@ -587,17 +588,23 @@ void jump_checker(Tile* tile_array, Checker* active_checker,
     tile_array[active_tile].checker_num;
 
   tile_array[active_tile].has_checker = 0;
+  tile_array[active_tile].checker_num = 13;
   
   int rm_tile = ( active_tile / 2 ) + ( destination_tile / 2);
-
-
 
   uint8_t* x_y = tile_to_coord(destination_tile);
   active_checker->x_tile = x_y[0];
   active_checker->y_tile = x_y[1];
 
   tile_array[rm_tile].has_checker = 0;
-
+  tile_array[rm_tile].has_checker = 13;
+  if (turn == TURN_RED) {
+    red_checkers[tile_array[rm_tile].checker_num].in_play = 0;
+  }
+  else {
+    blue_checkers[tile_array[rm_tile].checker_num].in_play = 0;
+  }
+  
   clear_draw(tile_array, active_checker, red_checkers, blue_checkers,
 	     active_tile, destination_tile);
   // clear_draw(tile_array, active_checker, red_checkers, blue_checkers, 
@@ -710,21 +717,22 @@ void loop()
     for (uint8_t i = 1; i < NUM_TILES; i++){
       tile_array[i].has_checker = 0;
     }
-    for (uint8_t i = 1; i < CHECKERS_PER_SIDE; i++) {	
+    for (uint8_t i = 0; i < CHECKERS_PER_SIDE; i++) {	
       uint8_t x_ti = (2*(i%4) + (((i/4) + 1)%2)); // fancy maths
       uint8_t y_ti = i/4;
       red_checkers[i].x_tile = x_ti;
       red_checkers[i].y_tile = y_ti;
       red_checkers[i].is_kinged = 0;
+      red_checkers[i].in_play = 1;
       // record that the proper tiles contain these checkers
       tile_array[coord_to_tile(x_ti, y_ti)].has_checker = TURN_RED;
       tile_array[coord_to_tile(x_ti, y_ti)].checker_num = i;
     }
-    red_checkers[0].x_tile = 1;
-    red_checkers[0].y_tile = 4;
-    tile_array[coord_to_tile(red_checkers[0].x_tile, red_checkers[0].y_tile)].has_checker = TURN_RED;
-    tile_array[coord_to_tile(red_checkers[0].x_tile, red_checkers[0].y_tile)].checker_num = 0;
-    draw_tile(tile_array, red_checkers, blue_checkers, coord_to_tile(red_checkers[0].x_tile, red_checkers[0].y_tile));
+    // red_checkers[0].x_tile = 1;
+    // red_checkers[0].y_tile = 4;
+    // tile_array[coord_to_tile(red_checkers[0].x_tile, red_checkers[0].y_tile)].has_checker = TURN_RED;
+    // tile_array[coord_to_tile(red_checkers[0].x_tile, red_checkers[0].y_tile)].checker_num = 0;
+    // draw_tile(tile_array, red_checkers, blue_checkers, coord_to_tile(red_checkers[0].x_tile, red_checkers[0].y_tile));
 
     // Fill the blue checker array
     for (uint8_t i = 0; i < CHECKERS_PER_SIDE; i++) {
@@ -734,6 +742,7 @@ void loop()
       blue_checkers[i].x_tile = x_ti;
       blue_checkers[i].y_tile = y_ti;
       blue_checkers[i].is_kinged = 0;
+      blue_checkers[i].in_play = 1;
       // record that the proper tiles contain these checkers
       tile_array[coord_to_tile(x_ti, y_ti)].has_checker = TURN_BLUE;
       tile_array[coord_to_tile(x_ti, y_ti)].checker_num = i;
@@ -744,7 +753,7 @@ void loop()
 		((i+40)/8)%2); // works, don't know why
     }
     
-
+    player_checkers = &blue_checkers[0];
 
     // for (uint8_t i=0; i < 8; i++){
     //   for (uint8_t j=0; j < 8; j++) {
@@ -763,21 +772,20 @@ void loop()
     // turn_indicator('r');
     // delay(10000);
     // turn_indicator('b');
+
     game_state = PLAY_MODE;
     tile_array[0].has_checker = 42;
-    player_checkers = &blue_checkers[0];
 
     // Serial.println(*player_dead);
     // delay(1000);
-    change_turn(&player_turn, player_dead, player_checkers, red_checkers,
-		blue_checkers, &red_dead, &blue_dead);
 
-    highlight_tile(tile_highlighted, player_turn);
   }
 
 
   else if (game_state == PLAY_MODE){
     if (recompute_moves){
+      change_turn();
+      highlight_tile(tile_highlighted, player_turn);
 
       for (int i = 0; i < CHECKERS_PER_SIDE; i++){
 	// assume all previous moves are now invalid
