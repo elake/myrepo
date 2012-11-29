@@ -646,6 +646,28 @@ uint8_t player_piece_on_tile(Tile* tile_array, uint8_t tile_highlighted,
   return (tile_array[tile_highlighted].has_checker == current_turn);
 }
 
+// Prints the board to serial-mon for debugging purposes
+void print_board_data(Tile* tile_array){
+  Serial.println("**********");
+  for(int i = 0; i < NUM_TILES; i++){
+    if( !(i%8) ){
+      Serial.print("*");
+    }
+    if(tile_array[i].has_checker == 0 || tile_array[i].has_checker == 42){
+      Serial.print("0");
+    }
+    if(tile_array[i].has_checker == 1){
+      Serial.print("R");
+    }
+    if(tile_array[i].has_checker == -1){
+      Serial.print("B");
+    }
+    if( !((i+1) % 8)){
+      Serial.println("*");
+    }
+  }
+  Serial.println("**********");
+}
 
 //*****************************************************************************
 //                          Sec?: Setup Procedure     
