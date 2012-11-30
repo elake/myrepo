@@ -691,12 +691,6 @@ void jump_checker(Tile* tile_array, Checker* active_checker,
   active_checker->x_tile = x_y[0];
   active_checker->y_tile = x_y[1];
 
-  //print_board_data(tile_array);
-
-
-  tile_array[rm_tile].has_checker = 0;
-  tile_array[rm_tile].checker_num = 13;
-
   // print_board_data(tile_array);
 
   if (turn == TURN_RED) {
@@ -711,6 +705,9 @@ void jump_checker(Tile* tile_array, Checker* active_checker,
     red_checkers[tile_array[rm_tile].checker_num].in_play = 0;
 
   }
+
+  tile_array[rm_tile].has_checker = 0;
+  tile_array[rm_tile].checker_num = 13;
 
   //print_board_data(tile_array);
 
