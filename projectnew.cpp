@@ -95,7 +95,7 @@ const uint8_t NUM_TILES = 64; // standard 8x8 board
 #define GAMEOVER_MODE 2
 #define HIGHLIGHT_MOVES 3
 #define HIGHLIGHT_JUMPS 4
-#define BOUNCE_PERIOD 1000000
+#define BOUNCE_PERIOD 500000
 #define TILE_MOVEMENT 0
 #define SUBTILE_MOVEMENT 1
 #define DEFAULT_TILE 36
@@ -631,7 +631,9 @@ void jump_checker(Tile* tile_array, Checker* active_checker,
 
 void bouncer_reset()
 {
-  bouncer = 1;
+  if(bouncer < 3){
+    bouncer++;
+  }
 }
 
 uint8_t modify_tile_select(int joy_x, int joy_y, uint8_t* tile_highlighted, 
@@ -1012,9 +1014,8 @@ void loop()
 
     }
 
-    if (digitalRead(JOYSTICK_BUTTON) == LOW && bouncer){
+    if (digitalRead(JOYSTICK_BUTTON) == LOW && bouncer > 1){
       bouncer = 0; // debounce
-      Timer3.setPeriod(BOUNCE_PERIOD); // Reset timer so it's always 1 second after bounce is set to 0
       if (cursor_mode == TILE_MOVEMENT) {
 	if (player_piece_on_tile(tile_array, tile_highlighted, player_turn)){
 	  // set active checker to the one we're selecting
