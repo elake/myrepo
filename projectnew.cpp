@@ -178,83 +178,6 @@ int8_t player_turn = TURN_RED;
 //                             Sec0.3: Functions     
 //*****************************************************************************
 
-void print_board_data(Tile* tile_array){
-  Serial.println("**********");
-  for(int i = 0; i < NUM_TILES; i++){
-    if( !(i%8) ){
-      Serial.print("*");
-    }
-    if(tile_array[i].has_checker == 0){
-      Serial.print("0");
-    }
-    else if(tile_array[i].has_checker == 1){
-      Serial.print("R");
-    }
-    else if(tile_array[i].has_checker == -1){
-      Serial.print("B");
-    }
-    else {Serial.print(tile_array[i].has_checker);}
-    if( !((i+1) % 8)){
-      Serial.println("*");
-    }
-  }
-  Serial.println("**********");
-
-  Serial.println(no_fjumps);
-
-  Serial.println("RED:");
-  for (int i = 0 ; i < CHECKERS_PER_SIDE; i++){
-    Serial.print("checker["); Serial.print(i); Serial.print("]s moves: ");
-    for (int j = 0; j < 4; j++) {
-      Serial.print(red_checkers[i].moves[j]); Serial.print(", ");
-    }
-    Serial.print("  location: ("); Serial.print(red_checkers[i].x_tile);
-    Serial.print(", "); Serial.print(red_checkers[i].y_tile); 
-    Serial.print(" ) ");
-    Serial.println();
-  }
-
-  Serial.println("RED:");
-  for (int i = 0 ; i < CHECKERS_PER_SIDE; i++){
-
-    Serial.print("checker["); Serial.print(i); Serial.print("]s jumps: ");
-    for (int j = 0; j < 4; j++) {
-      Serial.print(red_checkers[i].jumps[j]); Serial.print(", ");
-    }
-    Serial.print("  location: ("); Serial.print(red_checkers[i].x_tile);
-    Serial.print(", "); Serial.print(red_checkers[i].y_tile); 
-    Serial.print(" ) ");
-    Serial.println();
-  }
-  Serial.println("BLUE:");
-  for (int i = 0 ; i < CHECKERS_PER_SIDE; i++){
-    Serial.print("checker["); Serial.print(i); Serial.print("]s moves: ");
-    for (int j = 0; j < 4; j++) {
-      Serial.print(blue_checkers[i].moves[j]); Serial.print(", ");
-    }
-    Serial.print("  location: ("); Serial.print(blue_checkers[i].x_tile);
-    Serial.print(", "); Serial.print(blue_checkers[i].y_tile); 
-    Serial.print(" ) ");
-    Serial.println();
-
-  }
-  Serial.println("BLUE:");
-  for (int i = 0 ; i < CHECKERS_PER_SIDE; i++){
-
-    Serial.print("checker["); Serial.print(i); Serial.print("]s jumps: ");
-    for (int j = 0; j < 4; j++) {
-      Serial.print(blue_checkers[i].jumps[j]); Serial.print(", ");
-    }
-    Serial.print("  location: ("); Serial.print(blue_checkers[i].x_tile);
-    Serial.print(", "); Serial.print(blue_checkers[i].y_tile); 
-    Serial.print(" ) ");
-    Serial.println();
-  }
-
-  Serial.print("Avail mem (bytes):");
-  Serial.println(AVAIL_MEM);
-}
-
 // Sub0.30: tile -> coordinate // coordinate -> tile maps
 uint8_t coord_to_tile(uint8_t x, uint8_t y)
 {
@@ -422,13 +345,6 @@ void change_turn()
    */
   player_turn = (-1) * player_turn;
 
-  for (int i = 0; i < CHECKERS_PER_SIDE; i++) {
-    for (int j = 0; j < 4; j++){
-      red_checkers[i].moves[j] = 65; red_checkers[i].jumps[j] = 66;
-      blue_checkers[i].moves[j] = 67; blue_checkers[i].jumps[j] = 68;
-      }
-  }
-
   if (player_turn == TURN_RED){
     player_checkers = red_checkers;
     player_dead = &red_dead;
@@ -473,10 +389,10 @@ uint8_t* compute_checker_jumps(Tile* tile_array, Checker* checker,
     // 					  checker->y_tile - dir)].has_checker);
     // delay(10000);
     if (tile_array[coord_to_tile(checker->x_tile - 2,
-				 checker->y_tile - 2*dir)].has_checker == 0) {
+				  checker->y_tile - 2*dir)].has_checker == 0) {
       // Serial.println("Yes");
       checker->jumps[0] = coord_to_tile(checker->x_tile - 2, 
-					checker->y_tile - 2*dir);
+				     checker->y_tile - 2*dir);
       checker->must_jump = 1;
     }
   }
@@ -485,7 +401,7 @@ uint8_t* compute_checker_jumps(Tile* tile_array, Checker* checker,
     if (tile_array[coord_to_tile(checker->x_tile + 2,
 				 checker->y_tile - 2*dir)].has_checker == 0) {
       checker->jumps[1] = coord_to_tile(checker->x_tile + 2, 
-					checker->y_tile - 2*dir);
+				     checker->y_tile - 2*dir);
       checker->must_jump = 1;
     }
   }
@@ -495,7 +411,7 @@ uint8_t* compute_checker_jumps(Tile* tile_array, Checker* checker,
       if (tile_array[coord_to_tile(checker->x_tile - 2,
 				  checker->y_tile + 2*dir)].has_checker == 0) {
 	checker->jumps[2] = coord_to_tile(checker->x_tile - 2, 
-					  checker->y_tile + 2*dir);
+				       checker->y_tile + 2*dir);
 	checker->must_jump = 1;
       }
     }
@@ -504,7 +420,7 @@ uint8_t* compute_checker_jumps(Tile* tile_array, Checker* checker,
       if (tile_array[coord_to_tile(checker->x_tile + 2,
 				  checker->y_tile + 2*dir)].has_checker == 0) {
 	checker->jumps[3] = coord_to_tile(checker->x_tile + 2, 
-					  checker->y_tile + 2*dir);
+				       checker->y_tile + 2*dir);
 	checker->must_jump = 1;
       }
     }
@@ -516,23 +432,23 @@ void compute_checker_moves(Tile* tile_array, Checker* checker,
 {
   int8_t dir = opp_color;
   if (tile_array[coord_to_tile(checker->x_tile -1, 
-			       checker->y_tile - dir)].has_checker == 0) {
+			    checker->y_tile - dir)].has_checker == 0) {
     checker->moves[0] = coord_to_tile(checker->x_tile -1, checker->y_tile - 
 				      dir);
   }
   if (tile_array[coord_to_tile(checker->x_tile + 1 , 
-			       checker->y_tile - dir)].has_checker == 0) {
+			   checker->y_tile - dir)].has_checker == 0) {
     checker->moves[1] = coord_to_tile(checker->x_tile + 1, checker->y_tile - 
 				      dir);
   }
   if(checker->is_kinged){
     if (tile_array[coord_to_tile(checker->x_tile - 1, 
-				 checker->y_tile + dir)].has_checker == 0) {
+			    checker->y_tile + dir)].has_checker == 0) {
       checker->moves[2] = coord_to_tile(checker->x_tile - 1, checker->y_tile +
 					dir);
     }
     if (tile_array[coord_to_tile(checker->x_tile + 1, 
-				 checker->y_tile + dir)].has_checker == 0) {
+			   checker->y_tile + dir)].has_checker == 0) {
       checker->moves[3] = coord_to_tile(checker->x_tile + 1, checker->y_tile +
 					dir);
     }
@@ -544,7 +460,7 @@ uint8_t compute_moves(Tile* tile_array, Checker* checkers,
 {
   uint8_t no_fjumps = 1;
   for (uint8_t i = 0; i < CHECKERS_PER_SIDE; i++){
-    if (checkers[i].in_play) {
+    if (checkers[i].in_play){
       compute_checker_moves(tile_array, &checkers[i], opp_color);
       compute_checker_jumps(tile_array, &checkers[i], opp_color);
       if (checkers[i].must_jump){
@@ -665,53 +581,42 @@ void move_checker(Tile* tile_array, Checker* active_checker,
 }
 void jump_checker(Tile* tile_array, Checker* active_checker, 
 		  uint8_t active_tile, uint8_t destination_tile, 
-		  Checker* red_checkers, Checker* blue_checkers,
+		  Checker* red_checker, Checker* blue_checker,
 		  uint8_t* num_dead, uint8_t turn)
 {
-  //  print_board_data(tile_array);
-
   tile_array[destination_tile].has_checker = 
     tile_array[active_tile].has_checker;
   tile_array[destination_tile].checker_num = 
     tile_array[active_tile].checker_num;
 
-  //  print_board_data(tile_array);
-
   tile_array[active_tile].has_checker = 0;
   tile_array[active_tile].checker_num = 13;
   
-  //  print_board_data(tile_array);
-
-
-  int rm_tile =  (active_tile + destination_tile) / 2;
-
-  // print_board_data(tile_array);
+  uint8_t rm_tile =  (active_tile + destination_tile) / 2;
 
   uint8_t* x_y = tile_to_coord(destination_tile);
   active_checker->x_tile = x_y[0];
   active_checker->y_tile = x_y[1];
 
-  // print_board_data(tile_array);
 
   if (turn == TURN_RED) {
     blue_checkers[tile_array[rm_tile].checker_num].in_play = 0;
-
-    //print_board_data(tile_array);
-
+    for (uint8_t i = 0; i < 4; i++){
+      blue_checker[tile_array[rm_tile].checker_num].moves[i] = 64;
+      blue_checker[(tile_array[rm_tile].checker_num)].jumps[i] = 64;
+    }
   }
   else {
-    //print_board_data(tile_array);
-
-    red_checkers[tile_array[rm_tile].checker_num].in_play = 0;
-
+    red_checker[tile_array[rm_tile].checker_num].in_play = 0;
+    for (uint8_t i = 0; i < 4; i++){
+      red_checker[tile_array[rm_tile].checker_num].moves[i] = 64;
+      red_checker[tile_array[rm_tile].checker_num].jumps[i] = 64;
+    }
   }
-
   tile_array[rm_tile].has_checker = 0;
   tile_array[rm_tile].checker_num = 13;
 
-  //print_board_data(tile_array);
-
-  clear_draw(tile_array, active_checker, red_checkers, blue_checkers,
+  clear_draw(tile_array, active_checker, red_checker, blue_checker,
 	     active_tile, destination_tile);
   // clear_draw(tile_array, active_checker, red_checkers, blue_checkers, 
   // 	     active_tile, destination_tile);
@@ -720,9 +625,6 @@ void jump_checker(Tile* tile_array, Checker* active_checker,
   (*num_dead) = (*num_dead) + 1;
   // Serial.println(*num_dead);
   populate_graveyard(*num_dead, turn);
-
-  //print_board_data(tile_array);
-
 }
 
 
@@ -755,8 +657,174 @@ uint8_t player_piece_on_tile(Tile* tile_array, uint8_t tile_highlighted,
   return (tile_array[tile_highlighted].has_checker == current_turn);
 }
 
-// Prints the board to serial-mon for debugging purposes
+void print_all_data(Tile* tile_array, Checker* red_checkers, Checker* blue_checkers,
+		    Checker* player_checkers){
+  Serial.println();
+  Serial.println("has_checker board:");
+  Serial.println("**********");
+  for(int i = 0; i < NUM_TILES; i++){
+    if( !(i%8) ){
+      Serial.print("*");
+    }
+    if(tile_array[i].has_checker == 0){
+      Serial.print("0");
+    }
+    else if(tile_array[i].has_checker == 1){
+      Serial.print("R");
+    }
+    else if(tile_array[i].has_checker == -1){
+      Serial.print("B");
+    }
+    else {Serial.print(tile_array[i].has_checker);}
+    if( !((i+1) % 8)){
+      Serial.println("*");
+    }
+  }
+  Serial.println("**********");
+  Serial.println();
+  Serial.println("checker_num board:");
+  Serial.println("******************");
+  for(int i = 0; i < NUM_TILES; i++){
+    if( !(i%8) ){
+      Serial.print("*");
+    }
+    if(tile_array[i].checker_num < 10){
+      Serial.print(" ");
+      Serial.print(tile_array[i].checker_num);
+    }
+    else {Serial.print(tile_array[i].checker_num);}
+    if( !((i+1) % 8)){
+      Serial.println("*");
+    }
+  }
+  Serial.println("******************");
+  Serial.println();
 
+  Serial.println("Red checker data:");
+  Serial.println("   X: Y: King: In: MJ: Jumps:          Moves:");
+  Serial.println();
+  for(int i=0; i < CHECKERS_PER_SIDE; i++){
+    Serial.print("#"); Serial.print(i); Serial.print(":"); Serial.print(" ");
+    if(i < 10){ Serial.print(" ");}
+    Serial.print(red_checkers[i].x_tile); Serial.print(" ");
+    if(red_checkers[i].x_tile < 10){Serial.print(" ");}
+    Serial.print(red_checkers[i].y_tile); Serial.print("    ");
+    if(red_checkers[i].x_tile < 10){Serial.print(" ");}
+    Serial.print(red_checkers[i].is_kinged); Serial.print("   ");
+    Serial.print(red_checkers[i].in_play); Serial.print("   ");
+    Serial.print(red_checkers[i].must_jump); Serial.print("      ");
+    for(int j = 0; j < 4; j++){
+      Serial.print(red_checkers[i].jumps[j]); Serial.print(", ");
+      if(red_checkers[i].jumps[j] < 10){ Serial.print(" ");}
+    }
+    for(int j = 0; j < 4; j++){
+      Serial.print(red_checkers[i].moves[j]); Serial.print(", ");
+      if(red_checkers[i].moves[j] < 10){ Serial.print(" ");}
+    }
+    Serial.println();
+  }
+  Serial.println();
+  Serial.println();
+  Serial.println("Blue checker data:");
+  Serial.println("   X: Y: King: In: MJ: Jumps:          Moves:");
+  Serial.println();
+  for(int i=0; i < CHECKERS_PER_SIDE; i++){
+    Serial.print("#"); Serial.print(i); Serial.print(":"); Serial.print(" ");
+    if(i < 10){ Serial.print(" ");}
+    Serial.print(blue_checkers[i].x_tile); Serial.print(" ");
+    if(blue_checkers[i].x_tile < 10){Serial.print(" ");}
+    Serial.print(blue_checkers[i].y_tile); Serial.print("    ");
+    if(blue_checkers[i].x_tile < 10){Serial.print(" ");}
+    Serial.print(blue_checkers[i].is_kinged); Serial.print("   ");
+    Serial.print(blue_checkers[i].in_play); Serial.print("   ");
+    Serial.print(blue_checkers[i].must_jump); Serial.print("      ");
+    for(int j = 0; j < 4; j++){
+      Serial.print(blue_checkers[i].jumps[j]); Serial.print(", ");
+      if(blue_checkers[i].jumps[j] < 10){ Serial.print(" ");}
+    }
+    for(int j = 0; j < 4; j++){
+      Serial.print(blue_checkers[i].moves[j]); Serial.print(", ");
+      if(blue_checkers[i].moves[j] < 10){ Serial.print(" ");} 
+    }
+    Serial.println();
+  }
+  Serial.println();
+  Serial.println();
+}
+
+// Prints the board to serial-mon for debugging purposes
+void print_board_data(Tile* tile_array){
+  Serial.println("**********");
+  for(int i = 0; i < NUM_TILES; i++){
+    if( !(i%8) ){
+      Serial.print("*");
+    }
+    if(tile_array[i].has_checker == 0){
+      Serial.print("0");
+    }
+    else if(tile_array[i].has_checker == 1){
+      Serial.print("R");
+    }
+    else if(tile_array[i].has_checker == -1){
+      Serial.print("B");
+    }
+    else {Serial.print("0");}
+    if( !((i+1) % 8)){
+      Serial.println("*");
+    }
+  }
+  Serial.println("**********");
+  Serial.println(no_fjumps);
+
+  Serial.println("RED:");
+  for (int i = 0 ; i < CHECKERS_PER_SIDE; i++){
+    Serial.print("checker["); Serial.print(i); Serial.print("]s moves: ");
+    for (int j = 0; j < 4; j++) {
+      Serial.print(red_checkers[i].moves[j]); Serial.print(", ");
+    }
+    Serial.print("  location: ("); Serial.print(red_checkers[i].x_tile);
+    Serial.print(", "); Serial.print(red_checkers[i].y_tile); 
+    Serial.print(" ) ");
+    Serial.println();
+  }
+  for (int i = 0 ; i < CHECKERS_PER_SIDE; i++){
+
+    Serial.println("RED:");
+    Serial.print("checker["); Serial.print(i); Serial.print("]s jumps: ");
+    for (int j = 0; j < 4; j++) {
+      Serial.print(red_checkers[i].jumps[j]); Serial.print(", ");
+    }
+    Serial.print("  location: ("); Serial.print(red_checkers[i].x_tile);
+    Serial.print(", "); Serial.print(red_checkers[i].y_tile); 
+    Serial.print(" ) ");
+    Serial.println();
+  }
+  for (int i = 0 ; i < CHECKERS_PER_SIDE; i++){
+    Serial.println("BLUE:");
+    Serial.print("checker["); Serial.print(i); Serial.print("]s moves: ");
+    for (int j = 0; j < 4; j++) {
+      Serial.print(blue_checkers[i].moves[j]); Serial.print(", ");
+    }
+    Serial.print("  location: ("); Serial.print(blue_checkers[i].x_tile);
+    Serial.print(", "); Serial.print(blue_checkers[i].y_tile); 
+    Serial.print(" ) ");
+    Serial.println();
+  }
+  for (int i = 0 ; i < CHECKERS_PER_SIDE; i++){
+
+    Serial.println();
+    Serial.println("BLUE:");
+    Serial.print("checker["); Serial.print(i); Serial.print("]s jumps: ");
+    for (int j = 0; j < 4; j++) {
+      Serial.print(blue_checkers[i].jumps[j]); Serial.print(", ");
+    }
+    Serial.print("  location: ("); Serial.print(blue_checkers[i].x_tile);
+    Serial.print(", "); Serial.print(blue_checkers[i].y_tile); 
+    Serial.print(" ) ");
+    Serial.println();
+    Serial.println();
+  }
+}
 
 //*****************************************************************************
 //                          Sec?: Setup Procedure     
@@ -904,8 +972,8 @@ void loop()
 	// assume all previous moves are now invalid
 	player_checkers[i].must_jump = 0;
 	for (int j = 0; j < 4; j++){
-	  player_checkers[i].moves[j] = 65; // 64 is not a tile, void status
-	  player_checkers[i].jumps[j] = 67;
+	  player_checkers[i].moves[j] = 64; // 64 is not a tile, void status
+	  player_checkers[i].jumps[j] = 64;
 	}
       }
       
@@ -1002,11 +1070,9 @@ void loop()
 	  if(selection_matches_move(subtile_highlighted, active_checker, 
 				    no_fjumps)) {
 	    // jump checker
-
 	    jump_checker(tile_array, active_checker, tile_highlighted,
-			 subtile_highlighted, &red_checkers[0], 
-			 &blue_checkers[0], player_dead, player_turn);
-
+			 subtile_highlighted, red_checkers, blue_checkers,
+			 player_dead, player_turn);
 
 	    recompute_moves = 1;
 	    // tile_highlighted = DEFAULT_TILE;
@@ -1026,7 +1092,8 @@ void loop()
       bouncer = 0; // debounce
     } // end button press if
 
-    else if (digitalRead(DEBUG_BUTTON) == LOW){print_board_data(tile_array);}
+    else if (digitalRead(DEBUG_BUTTON) == LOW){print_all_data(tile_array,
+			    red_checkers, blue_checkers, player_checkers);}
   }
 }
 
