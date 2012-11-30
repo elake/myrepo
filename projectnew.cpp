@@ -565,18 +565,18 @@ void move_checker(Tile* tile_array, Checker* active_checker,
 
   tile_array[active_tile].has_checker = 0;
   tile_array[active_tile].checker_num = 13;
-  
-  clear_draw(tile_array, active_checker, red_checkers, blue_checkers,
-	     active_tile, destination_tile);
 
   uint8_t* x_y = tile_to_coord(destination_tile);
 
   active_checker->x_tile = x_y[0];
   active_checker->y_tile = x_y[1];
+  Serial.print("x_y[1]: "); Serial.println(x_y[1]);
+  if(x_y[1] == 0 || x_y[1] == 7){
+    active_checker->is_kinged = 1;
+  }
 
-  
-  // clear_draw(tile_array, active_checker, red_checkers, blue_checkers, 
-  // 	     active_tile, destination_tile);
+   clear_draw(tile_array, active_checker, red_checkers, blue_checkers,
+	     active_tile, destination_tile);
 
 }
 void jump_checker(Tile* tile_array, Checker* active_checker, 
@@ -1013,7 +1013,8 @@ void loop()
     }
 
     if (digitalRead(JOYSTICK_BUTTON) == LOW && bouncer){
-
+      bouncer = 0; // debounce
+      Timer3.setPeriod(BOUNCE_PERIOD); // Reset timer so it's always 1 second after bounce is set to 0
       if (cursor_mode == TILE_MOVEMENT) {
 	if (player_piece_on_tile(tile_array, tile_highlighted, player_turn)){
 	  // set active checker to the one we're selecting
@@ -1089,7 +1090,6 @@ void loop()
 
 	}
       }
-      bouncer = 0; // debounce
     } // end button press if
 
     else if (digitalRead(DEBUG_BUTTON) == LOW){print_all_data(tile_array,
