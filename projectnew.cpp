@@ -369,7 +369,7 @@ void change_turn()
 
 //Sub0.35: jump and force jump computing
 uint8_t* compute_checker_jumps(Tile* tile_array, Checker* checker,
-		     int8_t opp_color)
+			       int8_t opp_color, uint8_t djump)
 {
   /*
     this function checks the potential jumps of a given checker by checking
@@ -380,17 +380,8 @@ uint8_t* compute_checker_jumps(Tile* tile_array, Checker* checker,
   int8_t dir = opp_color;
   if (tile_array[coord_to_tile(checker->x_tile -1, 
 			    checker->y_tile - dir)].has_checker == opp_color) {
-    // Serial.print("Checker's x_tile: ");
-    // Serial.println(checker->x_tile);
-    // Serial.print("Checker's y_tile: ");
-    // Serial.println(checker->y_tile);
-    // Serial.print("Top left has checker: ");
-    // Serial.println(tile_array[coord_to_tile(checker->x_tile -1, 
-    // 					  checker->y_tile - dir)].has_checker);
-    // delay(10000);
     if (tile_array[coord_to_tile(checker->x_tile - 2,
 				  checker->y_tile - 2*dir)].has_checker == 0) {
-      // Serial.println("Yes");
       checker->jumps[0] = coord_to_tile(checker->x_tile - 2, 
 				     checker->y_tile - 2*dir);
       checker->must_jump = 1;
@@ -405,7 +396,7 @@ uint8_t* compute_checker_jumps(Tile* tile_array, Checker* checker,
       checker->must_jump = 1;
     }
   }
-  if(checker->is_kinged){
+  if(checker->is_kinged || djump){
     if (tile_array[coord_to_tile(checker->x_tile - 1, 
 			    checker->y_tile + dir)].has_checker == opp_color) {
       if (tile_array[coord_to_tile(checker->x_tile - 2,
@@ -462,7 +453,7 @@ uint8_t compute_moves(Tile* tile_array, Checker* checkers,
   for (uint8_t i = 0; i < CHECKERS_PER_SIDE; i++){
     if (checkers[i].in_play){
       compute_checker_moves(tile_array, &checkers[i], opp_color);
-      compute_checker_jumps(tile_array, &checkers[i], opp_color);
+      compute_checker_jumps(tile_array, &checkers[i], opp_color, 0);
       if (checkers[i].must_jump){
 	no_fjumps = 0;
       }
@@ -479,6 +470,7 @@ void highlight_moves(Checker* active_checker)
     }
   }
 }
+
 void highlight_jumps(Checker* active_checker)
 {
   for (uint8_t i = 0; i < 4; i++){
@@ -570,7 +562,6 @@ void move_checker(Tile* tile_array, Checker* active_checker,
 
   active_checker->x_tile = x_y[0];
   active_checker->y_tile = x_y[1];
-  Serial.print("x_y[1]: "); Serial.println(x_y[1]);
   if(x_y[1] == 0 || x_y[1] == 7){
     active_checker->is_kinged = 1;
   }
@@ -598,7 +589,6 @@ void jump_checker(Tile* tile_array, Checker* active_checker,
   active_checker->x_tile = x_y[0];
   active_checker->y_tile = x_y[1];
 
-
   if (turn == TURN_RED) {
     blue_checkers[tile_array[rm_tile].checker_num].in_play = 0;
     for (uint8_t i = 0; i < 4; i++){
@@ -613,8 +603,16 @@ void jump_checker(Tile* tile_array, Checker* active_checker,
       red_checker[tile_array[rm_tile].checker_num].jumps[i] = 64;
     }
   }
+  for (uint8_t i = 0; i < 4; i++){
+    active_checker->moves[i] = 64;
+    active_checker->jumps[i] = 64;
+  }
   tile_array[rm_tile].has_checker = 0;
   tile_array[rm_tile].checker_num = 13;
+
+  if(x_y[1] == 0 || x_y[1] == 7){
+    active_checker->is_kinged = 1;
+  }
 
   clear_draw(tile_array, active_checker, red_checker, blue_checker,
 	     active_tile, destination_tile);
@@ -1068,7 +1066,7 @@ void loop()
 	  }
 	  cursor_mode = TILE_MOVEMENT;
 	}
-	else {
+	else { // there are fjumps
 	  if(selection_matches_move(subtile_highlighted, active_checker, 
 				    no_fjumps)) {
 	    // jump checker
@@ -1076,19 +1074,35 @@ void loop()
 			 subtile_highlighted, red_checkers, blue_checkers,
 			 player_dead, player_turn);
 
-	    recompute_moves = 1;
-	    // tile_highlighted = DEFAULT_TILE;
-	    highlight_tile(tile_highlighted, player_turn);
+	    // now handle double jumping:
+	    if (active_checker->y_tile != 0 && active_checker->y_tile != 7) {
+	      compute_checker_jumps(tile_array, active_checker,
+				    (-1) * player_turn, 1);
+	      if (check_must_jump(active_checker)) { // if the piece can jump
+		tile_highlighted = subtile_highlighted;
+		highlight_tile(subtile_highlighted, TILE_HIGHLIGHT);
+		highlight_jumps(active_checker);
+	      }
+	      else { // else change turn
+		recompute_moves = 1;
+		cursor_mode = TILE_MOVEMENT;
+		highlight_tile(tile_highlighted, player_turn);
+	      }
+	    }
+	    else { // else change turn
+	      recompute_moves = 1;
+	      cursor_mode = TILE_MOVEMENT;
+	      highlight_tile(tile_highlighted, player_turn);
+	    }
 	    
 	  }
 	  else {
 	    clear_draw(tile_array, active_checker, red_checkers, blue_checkers,
 		       tile_highlighted, subtile_highlighted);
+	    cursor_mode = TILE_MOVEMENT;
+	    highlight_tile(tile_highlighted, player_turn);
 	    
 	  }
-	  cursor_mode = TILE_MOVEMENT;
-	  highlight_tile(tile_highlighted, player_turn);
-
 	}
       }
     } // end button press if
