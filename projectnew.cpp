@@ -370,7 +370,7 @@ void populate_graveyard(uint8_t num_dead, int8_t turn)
       tft.setCursor(30,30);
       tft.setTextColor(ST7735_RED);
       tft.setTextSize(4);
-      tft.print("RED TEAM WINS!");
+      tft.print("RED TEAM WINS");
       while(1){ // reset game to play again
       }
     }
@@ -382,12 +382,12 @@ void populate_graveyard(uint8_t num_dead, int8_t turn)
 		     GRAV_PIECEWIDTH, GRAV_PIECEHEIGHT);
     }
   }
-  else if (turn == CHECKERS_PER_SIDE) { // someone's killed a red piece!
-    if (num_dead == 1){ // blue team wins!
+  else if (turn == TURN_BLUE) { // someone's killed a red piece!
+    if (num_dead == CHECKERS_PER_SIDE){ // blue team wins!
       tft.setCursor(30,30);
       tft.setTextColor(ST7735_BLUE);
       tft.setTextSize(4);
-      tft.print("BLUE TEAM WINS!");
+      tft.print("BLUE TEAM WINS");
       while(1){ // reset game to play again
       }
     }
