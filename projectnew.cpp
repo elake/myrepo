@@ -366,18 +366,38 @@ void populate_graveyard(uint8_t num_dead, int8_t turn)
   uint8_t y;
 
   if (turn == TURN_RED) { // someone's killed a blue piece!
-    col_index = dead_index / 3;
-    x = GRAVSTART_BLUEX + (col_index * GRAV_PIECEWIDTH);
-    y = GRAVSTART_Y + (row_index * GRAV_PIECEHEIGHT) + row_index;
-    lcd_image_draw(&cbg_image, &tft, x, y, x, y, 
-		   GRAV_PIECEWIDTH, GRAV_PIECEHEIGHT);
+    if (num_dead == 1){ // red team wins!
+      tft.setCursor(30,30);
+      tft.setTextColor(ST7735_RED);
+      tft.setTextSize(4);
+      tft.print("RED TEAM WINS!");
+      while(1){ // reset game to play again
+      }
+    }
+    else {
+      col_index = dead_index / 3;
+      x = GRAVSTART_BLUEX + (col_index * GRAV_PIECEWIDTH);
+      y = GRAVSTART_Y + (row_index * GRAV_PIECEHEIGHT) + row_index;
+      lcd_image_draw(&cbg_image, &tft, x, y, x, y, 
+		     GRAV_PIECEWIDTH, GRAV_PIECEHEIGHT);
+    }
   }
   else if (turn == TURN_BLUE) { // someone's killed a red piece!
+    if (num_dead == 1){ // blue team wins!
+      tft.setCursor(30,30);
+      tft.setTextColor(ST7735_BLUE);
+      tft.setTextSize(4);
+      tft.print("BLUE TEAM WINS!");
+      while(1){ // reset game to play again
+      }
+    }
+    else {
     col_index = 3 - dead_index / 3;
     x = GRAVSTART_REDX + (col_index * GRAV_PIECEWIDTH);
     y = GRAVSTART_Y + (row_index * GRAV_PIECEHEIGHT) + row_index;
     lcd_image_draw(&cbg_image, &tft, x, y, x, y, 
 		   GRAV_PIECEWIDTH, GRAV_PIECEHEIGHT);
+    }
   }
 }
 
