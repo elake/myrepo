@@ -136,7 +136,7 @@ const uint8_t NUM_TILES = 64; // standard 8x8 board
 #define RED_HIGHLIGHT ST7735_RED
 #define BLUE_HIGHLIGHT ST7735_BLUE
 #define MOVE_HIGHLIGHT ST7735_GREEN
-#define JUMP_HIGHLIGHT ST7735_MAGENTA
+#define JUMP_HIGHLIGHT 0xfb20 // orange
 
 // Sub0.111: optional pins
 #define DEBUG_BUTTON 10
@@ -196,7 +196,7 @@ uint8_t cursor_mode = TILE_MOVEMENT;
 uint8_t turn_change = 1; // compute them to start
 uint8_t no_fjumps = 1;
 uint8_t signal_redraw = 0;
-int8_t player_turn = TURN_RED;
+int16_t player_turn = TURN_RED; // 16-bit necessary for tile_highlight function
 
 // Sub0.208: active player variable pointers
 uint8_t* player_dead = &red_dead;
@@ -338,6 +338,34 @@ void clear_draw(Tile* tile_array, Checker* active_checker,
   }
 }
 
+void win_screen(int8_t turn){
+  if(turn == TURN_BLUE){
+    tft.fillRect(BORDER_WIDTH, BORDER_WIDTH, SCREEN_WIDTH - 8,
+		 SCREEN_WIDTH - 8, ST7735_BLACK);
+    tft.setCursor(18,21);
+    tft.setTextColor(ST7735_BLUE);
+    tft.setTextSize(4);
+    tft.print("BLUE");
+    tft.setCursor(18,51);
+    tft.print("TEAM");
+    tft.setCursor(18,81);
+    tft.print("WINS");
+  }
+  else if(turn == TURN_RED){
+    tft.fillRect(BORDER_WIDTH, BORDER_WIDTH, SCREEN_WIDTH - 8,
+		 SCREEN_WIDTH - 8, ST7735_BLACK);
+    tft.setCursor(33,21);
+    tft.setTextColor(ST7735_RED);
+    tft.setTextSize(4);
+    tft.print("RED");
+    tft.setCursor(18,51);
+    tft.print("TEAM");
+    tft.setCursor(18,81);
+    tft.print("WINS");
+  }
+    while(1){ // reset game to play again
+    }
+}
 void populate_graveyard(uint8_t num_dead, int8_t turn)
 {
 
@@ -366,40 +394,24 @@ void populate_graveyard(uint8_t num_dead, int8_t turn)
   uint8_t y;
 
   if (turn == TURN_RED) { // someone's killed a blue piece!
-    if (num_dead == CHECKERS_PER_SIDE){ // red team wins!
-      tft.setCursor(30,30);
-      tft.setTextColor(ST7735_RED);
-      tft.setTextSize(4);
-      tft.print("RED TEAM WINS");
-      while(1){ // reset game to play again
-      }
-    }
-    else {
-      col_index = dead_index / 3;
-      x = GRAVSTART_BLUEX + (col_index * GRAV_PIECEWIDTH);
-      y = GRAVSTART_Y + (row_index * GRAV_PIECEHEIGHT) + row_index;
-      lcd_image_draw(&cbg_image, &tft, x, y, x, y, 
-		     GRAV_PIECEWIDTH, GRAV_PIECEHEIGHT);
-    }
+    col_index = dead_index / 3;
+    x = GRAVSTART_BLUEX + (col_index * GRAV_PIECEWIDTH);
+    y = GRAVSTART_Y + (row_index * GRAV_PIECEHEIGHT) + row_index;
+    lcd_image_draw(&cbg_image, &tft, x, y, x, y, 
+		   GRAV_PIECEWIDTH, GRAV_PIECEHEIGHT);
   }
   else if (turn == TURN_BLUE) { // someone's killed a red piece!
-    if (num_dead == CHECKERS_PER_SIDE){ // blue team wins!
-      tft.setCursor(30,30);
-      tft.setTextColor(ST7735_BLUE);
-      tft.setTextSize(4);
-      tft.print("BLUE TEAM WINS");
-      while(1){ // reset game to play again
-      }
-    }
-    else {
     col_index = 3 - dead_index / 3;
     x = GRAVSTART_REDX + (col_index * GRAV_PIECEWIDTH);
     y = GRAVSTART_Y + (row_index * GRAV_PIECEHEIGHT) + row_index;
     lcd_image_draw(&cbg_image, &tft, x, y, x, y, 
 		   GRAV_PIECEWIDTH, GRAV_PIECEHEIGHT);
-    }
+  }
+  if (num_dead == CHECKERS_PER_SIDE){
+    win_screen(turn);
   }
 }
+
 
 void change_turn()
 {
@@ -591,7 +603,7 @@ uint8_t compute_moves(Tile* tile_array, Checker* checkers,
 
 // Sub0.303: highlighting
 
-void highlight_tile(uint8_t tile_num, int8_t mode)
+void highlight_tile(uint8_t tile_num, int16_t mode)
 {
   /*
     draw a rect around the tile given by the x, y coordinates, with color 
@@ -608,7 +620,7 @@ void highlight_tile(uint8_t tile_num, int8_t mode)
 
   if (mode == TURN_RED) { color = RED_HIGHLIGHT; }
   else if (mode == TURN_BLUE) { color = BLUE_HIGHLIGHT; }
-  else { color = mode; }
+  else {color = mode; }
 
   uint8_t* x_y = tile_to_coord(tile_num);
   uint8_t col = BORDER_WIDTH + (TILE_SIZE * x_y[0]);
