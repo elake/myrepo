@@ -93,6 +93,11 @@
 #define GRAVSTART_Y 128 // both start at the same horizontal level
 #define GRAV_ROWSEP 1 // the vertical separation between each row in graveyard
 
+#define WINSTART_X 18
+#define WINSTART_Y 21
+#define WIN_INCREMENT 30
+#define RED_OFFSET 15
+
 // Sub0.102: checkers settings
 const uint8_t CHECKERS_PER_SIDE = 12; // 12 pieces per side, as per game rules
 const uint8_t NUM_TILES = 64; // standard 8x8 board
@@ -340,27 +345,27 @@ void clear_draw(Tile* tile_array, Checker* active_checker,
 
 void win_screen(int8_t turn){
   if(turn == TURN_BLUE){
-    tft.fillRect(BORDER_WIDTH, BORDER_WIDTH, SCREEN_WIDTH - 8,
-		 SCREEN_WIDTH - 8, ST7735_BLACK);
-    tft.setCursor(18,21);
+    tft.fillRect(BORDER_WIDTH, BORDER_WIDTH, SCREEN_WIDTH - (2*BORDER_WIDTH)
+		 ,SCREEN_WIDTH - (2*BORDER_WIDTH), ST7735_BLACK);
+    tft.setCursor(WINSTART_X, WINSTART_Y);
     tft.setTextColor(ST7735_BLUE);
     tft.setTextSize(4);
     tft.print("BLUE");
-    tft.setCursor(18,51);
+    tft.setCursor(WINSTART_X, WINSTART_Y + WIN_INCREMENT);
     tft.print("TEAM");
-    tft.setCursor(18,81);
+    tft.setCursor(WINSTART_X, WINSTART_Y + (2*WIN_INCREMENT));
     tft.print("WINS");
   }
   else if(turn == TURN_RED){
-    tft.fillRect(BORDER_WIDTH, BORDER_WIDTH, SCREEN_WIDTH - 8,
-		 SCREEN_WIDTH - 8, ST7735_BLACK);
-    tft.setCursor(33,21);
+    tft.fillRect(BORDER_WIDTH, BORDER_WIDTH, SCREEN_WIDTH - (2*BORDER_WIDTH)
+		 ,SCREEN_WIDTH - (2*BORDER_WIDTH), ST7735_BLACK);
+    tft.setCursor(WINSTART_X + RED_OFFSET, WINSTART_Y);
     tft.setTextColor(ST7735_RED);
     tft.setTextSize(4);
     tft.print("RED");
-    tft.setCursor(18,51);
+    tft.setCursor(WINSTART_X, WINSTART_Y + WIN_INCREMENT);
     tft.print("TEAM");
-    tft.setCursor(18,81);
+    tft.setCursor(WINSTART_X, WINSTART_Y + (2*WIN_INCREMENT));
     tft.print("WINS");
   }
     while(1){ // reset game to play again
