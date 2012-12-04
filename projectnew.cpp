@@ -75,7 +75,7 @@
 
 //*****************************************************************************
 //                    Sec0.1: Global Variables and Constants
-//****************************************************************************
+//*****************************************************************************
 // Sub0.100: lcd screen wiring
 #define SD_CS 5
 #define TFT_CS 6
@@ -413,6 +413,7 @@ void populate_graveyard(uint8_t num_dead, int8_t turn)
 		   GRAV_PIECEWIDTH, GRAV_PIECEHEIGHT);
   }
   if (num_dead == CHECKERS_PER_SIDE){
+    delay(500);
     win_screen(turn);
   }
 }
@@ -696,7 +697,6 @@ uint8_t check_can_move(Checker* active_checker)
       matches = 1;
     }
   }
-
   return matches;
 }	
 
@@ -1274,21 +1274,23 @@ void loop()
 	      }
 	    }
 	    
+	    tile_array[rm_tile].has_checker = 0;
+	    tile_array[rm_tile].checker_num = 13;
+
+	    clear_draw(tile_array, active_checker, red_checkers, blue_checkers,
+		       tile_highlighted, subtile_highlighted);
+
 	    // nullify the jumping checkers moves and jumps, for now
 	    for (uint8_t i = 0; i < POSSIBLE_MOVES; i++){
 	      active_checker->moves[i] = VOID_TILE;
 	      active_checker->jumps[i] = VOID_TILE;
 	    }
 
-	    tile_array[rm_tile].has_checker = 0;
-	    tile_array[rm_tile].checker_num = 13;
 	    //*****************************************************************
 
 	    (*player_dead) = (*player_dead) + 1;
 	    populate_graveyard(*player_dead, player_turn);
 
-	    clear_draw(tile_array, active_checker, red_checkers, blue_checkers,
-		       tile_highlighted, subtile_highlighted);
 	    checker_locked = 0;
 	    // now handle double jumping:
 	    if (active_checker->y_tile != 0 && active_checker->y_tile != 7) {
@@ -1312,7 +1314,7 @@ void loop()
 	      cursor_mode = TILE_MOVEMENT;
 	      highlight_tile(tile_highlighted, player_turn);
 	    }
-	    
+
 	  }
 	  else if(!checker_locked) {
 	    clear_draw(tile_array, active_checker, red_checkers, blue_checkers,
