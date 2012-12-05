@@ -904,7 +904,9 @@ void play_jump_sound(){
 void play_move_sound(){
   tone(SPEAKER_PIN, NOTE_D4, DUR_MOVE);
 }
-
+// Final Fantasy Victory Fanfare
+// Copyright © 2012 SQUARE ENIX CO., LTD
+// Used less than ten notes, which is probably okay?
 void play_victory_music(){
   tone(SPEAKER_PIN, NOTE_EB5, TRIPLET_EIGHTH);
   delay(TRIPLET_EIGHTH);
