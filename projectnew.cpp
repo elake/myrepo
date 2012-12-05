@@ -150,6 +150,12 @@ const uint8_t NUM_TILES = 64; // standard 8x8 board
 #define JUMP_HIGHLIGHT 0xfb20 // orange
 
 // Sub0.111: note mapping
+#define NOTE_EB3 156
+#define NOTE_GB3 185
+#define NOTE_G3  196
+#define NOTE_AB3 208
+#define NOTE_B3  247
+#define NOTE_EB4 311
 #define NOTE_C4  262
 #define NOTE_D4  294
 #define NOTE_E4  330
@@ -157,6 +163,9 @@ const uint8_t NUM_TILES = 64; // standard 8x8 board
 #define NOTE_G4  392
 #define NOTE_A4  440
 #define NOTE_B4  494
+#define NOTE_EB5 622
+#define NOTE_DB5 554
+#define REST 0
 
 // Sub0.112: sound playing
 #define DUR_MOVE 20
@@ -166,6 +175,9 @@ const uint8_t NUM_TILES = 64; // standard 8x8 board
 #define DUR_NOTE3 50
 #define DUR_NOTE4 200
 #define NOTE_DELAY 100
+#define QUARTER_NOTE 400
+#define DOTTED_HALF 1200
+#define TRIPLET_EIGHTH 133
 
 // Sub0.113: optional pins
 #define DEBUG_BUTTON 10
@@ -881,26 +893,39 @@ void bouncer_reset()
 
 // Sub0.310: sounds & music
 
-void play_move_sound(){
+void play_jump_sound(){
   // play the movement sound
-  tone(SPEAKER_PIN, NOTE_A4, DUR_MOVE);
+  for(int i = 500; i < 1001; i = i+500){
+    tone(SPEAKER_PIN, i, 100);
+    delay(100);
+  }
 }
 
-void play_jump_sound(){
-  tone(SPEAKER_PIN, NOTE_C4, DUR_JUMP);
+void play_move_sound(){
+  tone(SPEAKER_PIN, NOTE_D4, DUR_MOVE);
 }
 
 void play_victory_music(){
-  tone(SPEAKER_PIN, NOTE_C4, DUR_NOTE1);
-  delay(NOTE_DELAY);
-  noTone(SPEAKER_PIN);
-  tone(SPEAKER_PIN, NOTE_F4, DUR_NOTE2);
-  delay(NOTE_DELAY);
-  noTone(SPEAKER_PIN);
-  tone(SPEAKER_PIN, NOTE_D4, DUR_NOTE3);
-  delay(NOTE_DELAY);
-  noTone(SPEAKER_PIN);
-  tone(SPEAKER_PIN, NOTE_B4, DUR_NOTE4);
+  tone(SPEAKER_PIN, NOTE_EB5, TRIPLET_EIGHTH);
+  delay(TRIPLET_EIGHTH);
+  tone(SPEAKER_PIN, NOTE_EB5, TRIPLET_EIGHTH);
+  delay(TRIPLET_EIGHTH);
+  tone(SPEAKER_PIN, NOTE_EB5, TRIPLET_EIGHTH);
+  delay(TRIPLET_EIGHTH);
+  tone(SPEAKER_PIN, NOTE_EB5, QUARTER_NOTE);
+  delay(QUARTER_NOTE);
+  tone(SPEAKER_PIN, NOTE_B4, QUARTER_NOTE);
+  delay(QUARTER_NOTE);
+  tone(SPEAKER_PIN, NOTE_DB5, QUARTER_NOTE);
+  delay(QUARTER_NOTE);
+  tone(SPEAKER_PIN, NOTE_EB5, TRIPLET_EIGHTH);
+  delay(TRIPLET_EIGHTH);
+  tone(SPEAKER_PIN, REST, TRIPLET_EIGHTH);
+  delay(TRIPLET_EIGHTH);
+  tone(SPEAKER_PIN, NOTE_DB5, TRIPLET_EIGHTH);
+  delay(TRIPLET_EIGHTH);
+  tone(SPEAKER_PIN, NOTE_EB5, DOTTED_HALF);
+  delay(DOTTED_HALF);
 }
 
 // Sub0.310: debug procedures
@@ -1112,6 +1137,7 @@ void setup()
   digitalWrite(JOYSTICK_BUTTON, HIGH); // button presses set voltage to LOW!!
 
   pinMode(SPEAKER_PIN, OUTPUT);
+
   // debug button (optional)
   pinMode(DEBUG_BUTTON, INPUT);
   digitalWrite(DEBUG_BUTTON, HIGH);
