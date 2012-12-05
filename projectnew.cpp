@@ -15,7 +15,9 @@
     Sub0.108: cursor mode mapping
     Sub0.109: tile settings
     Sub0.110: color mapping
-    Sub0.111: optional pins
+    Sub0.111: note mapping
+    Sub0.112: sound playing
+    Sub0.113: optional pins
   Sec0.2: Non-Constant Globals and Cache Data
     Sub0.200: checker player variables
     Sub0.201: tile array
@@ -38,7 +40,8 @@
     Sub0.307: joystick tile manipulation
     Sub0.308: nicer boolean functions
     Sub0.309: debounce reset
-    Sub0.310: debug procedures
+    Sub0.310: sounds & music
+    Sub0.311: debug procedures
   Sec0.4: Arduino Setup Procedure
     Sub0.400: serial monitor & sd card preliminaries
     Sub0.401: drawing the checker board
@@ -57,9 +60,9 @@
     Sub0.508: debug prompt
  */
 
-//*****************************************************************************
+//****************************************************************************
 //                     Sec0.0: Included Files and Libraries
-//*****************************************************************************
+//****************************************************************************
 
 #include <Arduino.h>
 #include <Adafruit_GFX.h>
@@ -72,10 +75,11 @@
 #include "tile.h"
 #include "checker.h"
 #include "lcd_image.h"
+#include "projectnew.h"
 
-//*****************************************************************************
+//****************************************************************************
 //                    Sec0.1: Global Variables and Constants
-//*****************************************************************************
+//****************************************************************************
 // Sub0.100: lcd screen wiring
 #define SD_CS 5
 #define TFT_CS 6
@@ -116,6 +120,8 @@ const uint8_t NUM_TILES = 64; // standard 8x8 board
 #define JOYSTICK_VERT  1    // Analog input A1 - vertical
 #define JOYSTICK_BUTTON 9   // Digitial input pin 9 for the button
 
+#define SPEAKER_PIN  11
+
 // Sub0.105: turn mapping
 #define TURN_RED 1
 #define TURN_BLUE -1
@@ -143,12 +149,30 @@ const uint8_t NUM_TILES = 64; // standard 8x8 board
 #define MOVE_HIGHLIGHT ST7735_GREEN
 #define JUMP_HIGHLIGHT 0xfb20 // orange
 
-// Sub0.111: optional pins
+// Sub0.111: note mapping
+#define NOTE_C4  262
+#define NOTE_D4  294
+#define NOTE_E4  330
+#define NOTE_F4  349
+#define NOTE_G4  392
+#define NOTE_A4  440
+#define NOTE_B4  494
+
+// Sub0.112: sound playing
+#define DUR_MOVE 20
+#define DUR_JUMP 50
+#define DUR_NOTE1 50
+#define DUR_NOTE2 75
+#define DUR_NOTE3 50
+#define DUR_NOTE4 200
+#define NOTE_DELAY 100
+
+// Sub0.113: optional pins
 #define DEBUG_BUTTON 10
 
-//*****************************************************************************
+//****************************************************************************
 //                   Sec0.2: Non-Constant Globals and Cache Data     
-//*****************************************************************************
+//****************************************************************************
 
 // Sub0.200: checkers player variables
 Checker red_checkers[CHECKERS_PER_SIDE];  // the array of red checkers
@@ -200,8 +224,9 @@ uint8_t game_state = SETUP_MODE; // we need to set up the board
 uint8_t cursor_mode = TILE_MOVEMENT;
 uint8_t turn_change = 1; // compute them to start
 uint8_t no_fjumps = 1;
+uint8_t no_moves = 0;
 uint8_t signal_redraw = 0;
-int16_t player_turn = TURN_RED; // 16-bit necessary for tile_highlight function
+int16_t player_turn = TURN_RED; //16-bit necessary for tile_highlight function
 
 // Sub0.208: active player variable pointers
 uint8_t* player_dead = &red_dead;
@@ -212,9 +237,11 @@ Checker* player_checkers;
 uint8_t bouncer = 0;
 
 
-//*****************************************************************************
+//****************************************************************************
 //                             Sec0.3: Functions     
-//*****************************************************************************
+//****************************************************************************
+
+
 
 // Sub0.300: tile -> coordinate // coordinate -> tile maps
 
@@ -249,8 +276,8 @@ uint8_t* tile_to_coord(uint8_t tile_num)
 
 // Sub0.301: drawing procedures
 
-void draw_tile(Tile* tile_array, Checker* red_checkers, Checker* blue_checkers,
-	       uint8_t tile_index)
+void draw_tile(Tile* tile_array, Checker* red_checkers, 
+	       Checker* blue_checkers, uint8_t tile_index)
 {
   /*
     draw the tile tile_array[tile_index], and the checker it
@@ -344,6 +371,8 @@ void clear_draw(Tile* tile_array, Checker* active_checker,
 }
 
 void win_screen(int8_t turn){
+  // draws a win screen for whosever turn it is, and initiates a new game
+  delay(500);
   if(turn == TURN_BLUE){
     tft.fillRect(BORDER_WIDTH, BORDER_WIDTH, SCREEN_WIDTH - (2*BORDER_WIDTH)
 		 ,SCREEN_WIDTH - (2*BORDER_WIDTH), ST7735_BLACK);
@@ -368,8 +397,9 @@ void win_screen(int8_t turn){
     tft.setCursor(WINSTART_X, WINSTART_Y + (2*WIN_INCREMENT));
     tft.print("WINS");
   }
-    while(1){ // reset game to play again
-    }
+  play_victory_music();
+  delay(10000);
+  game_state = SETUP_MODE;
 }
 void populate_graveyard(uint8_t num_dead, int8_t turn)
 {
@@ -388,7 +418,7 @@ void populate_graveyard(uint8_t num_dead, int8_t turn)
   */
   // invariant: 1 <= num_dead <= 12
   if (( num_dead < 1 || num_dead > CHECKERS_PER_SIDE)){
-    Serial.println("You've called the populate graveyard function improperly");
+    Serial.println("You called the populate graveyard function improperly");
     while(1) {} // loop until plug is pulled.
   }
 
@@ -412,8 +442,8 @@ void populate_graveyard(uint8_t num_dead, int8_t turn)
     lcd_image_draw(&cbg_image, &tft, x, y, x, y, 
 		   GRAV_PIECEWIDTH, GRAV_PIECEHEIGHT);
   }
-  if (num_dead == CHECKERS_PER_SIDE){
-    delay(500);
+  
+  if (num_dead == CHECKERS_PER_SIDE) {
     win_screen(turn);
   }
 }
@@ -445,7 +475,7 @@ void change_turn()
     lcd_image_draw(&cbr_image, &tft, 0, 0, 0, 0, SCREEN_WIDTH, BORDER_WIDTH);
     lcd_image_draw(&cbr_image, &tft, 0, 0, 0, 0, BORDER_WIDTH, SCREEN_WIDTH);
     lcd_image_draw(&cbr_image, &tft, SCREEN_WIDTH - BORDER_WIDTH, 0, 
-		   SCREEN_WIDTH - BORDER_WIDTH, 0, BORDER_WIDTH, SCREEN_WIDTH);
+		  SCREEN_WIDTH - BORDER_WIDTH, 0, BORDER_WIDTH, SCREEN_WIDTH);
     lcd_image_draw(&cbr_image, &tft, 0, SCREEN_WIDTH - BORDER_WIDTH, 0, 
 		   SCREEN_WIDTH - BORDER_WIDTH, SCREEN_WIDTH, BORDER_WIDTH);
   }
@@ -455,7 +485,7 @@ void change_turn()
     lcd_image_draw(&cbb_image, &tft, 0, 0, 0, 0, SCREEN_WIDTH, BORDER_WIDTH);
     lcd_image_draw(&cbb_image, &tft, 0, 0, 0, 0, BORDER_WIDTH, SCREEN_WIDTH);
     lcd_image_draw(&cbb_image, &tft, SCREEN_WIDTH - BORDER_WIDTH, 0, 
-		   SCREEN_WIDTH - BORDER_WIDTH, 0, BORDER_WIDTH, SCREEN_WIDTH);
+		  SCREEN_WIDTH - BORDER_WIDTH, 0, BORDER_WIDTH, SCREEN_WIDTH);
     lcd_image_draw(&cbb_image, &tft, 0, SCREEN_WIDTH - BORDER_WIDTH, 0, 
 		   SCREEN_WIDTH - BORDER_WIDTH, SCREEN_WIDTH, BORDER_WIDTH);
   }
@@ -486,9 +516,9 @@ uint8_t* compute_checker_jumps(Tile* tile_array, Checker* checker,
   // directions are from the perspective of the checker:
   // forward-left
   if (tile_array[coord_to_tile(checker->x_tile -1, 
-			    checker->y_tile - dir)].has_checker == opp_color) {
+			    checker->y_tile - dir)].has_checker == opp_color){
     if (tile_array[coord_to_tile(checker->x_tile - 2,
-				  checker->y_tile - 2*dir)].has_checker == 0) {
+				  checker->y_tile - 2*dir)].has_checker == 0){
       checker->jumps[0] = coord_to_tile(checker->x_tile - 2, 
 				     checker->y_tile - 2*dir);
       checker->must_jump = 1;
@@ -497,7 +527,7 @@ uint8_t* compute_checker_jumps(Tile* tile_array, Checker* checker,
 
   // forward-right
   if (tile_array[coord_to_tile(checker->x_tile + 1 , 
-			    checker->y_tile - dir)].has_checker == opp_color) {
+			    checker->y_tile - dir)].has_checker == opp_color){
     if (tile_array[coord_to_tile(checker->x_tile + 2,
 				 checker->y_tile - 2*dir)].has_checker == 0) {
       checker->jumps[1] = coord_to_tile(checker->x_tile + 2, 
@@ -509,9 +539,9 @@ uint8_t* compute_checker_jumps(Tile* tile_array, Checker* checker,
 
     // backward-left
     if (tile_array[coord_to_tile(checker->x_tile - 1, 
-			    checker->y_tile + dir)].has_checker == opp_color) {
+			    checker->y_tile + dir)].has_checker == opp_color){
       if (tile_array[coord_to_tile(checker->x_tile - 2,
-				  checker->y_tile + 2*dir)].has_checker == 0) {
+				  checker->y_tile + 2*dir)].has_checker == 0){
 	checker->jumps[2] = coord_to_tile(checker->x_tile - 2, 
 				       checker->y_tile + 2*dir);
 	checker->must_jump = 1;
@@ -519,9 +549,9 @@ uint8_t* compute_checker_jumps(Tile* tile_array, Checker* checker,
     }
     // backward-right
     if (tile_array[coord_to_tile(checker->x_tile + 1, 
-			    checker->y_tile + dir)].has_checker == opp_color) {
+			    checker->y_tile + dir)].has_checker == opp_color){
       if (tile_array[coord_to_tile(checker->x_tile + 2,
-				  checker->y_tile + 2*dir)].has_checker == 0) {
+				  checker->y_tile + 2*dir)].has_checker == 0){
 	checker->jumps[3] = coord_to_tile(checker->x_tile + 2, 
 				       checker->y_tile + 2*dir);
 	checker->must_jump = 1;
@@ -584,7 +614,7 @@ uint8_t compute_moves(Tile* tile_array, Checker* checkers,
     computes the moves and jumps of an array of checker structs, where:
 
     tile_array: the array of tiles of the checker board
-    checkers: the array of checker structs for which to compute moves and jumps
+    checkers: the array of checker structs we are computing for
     opp_color: the color of the opponents checkers
 
    */
@@ -712,6 +742,17 @@ uint8_t check_must_jump(Checker* active_checker)
   return matches;
 }		    
 
+uint8_t player_has_move(Checker* player_checkers) {
+  // determines whether the given player has a checker with a move
+  uint8_t player_has_move = 1;
+  for (uint8_t i = 0; i < CHECKERS_PER_SIDE; i++) {
+    if (check_can_move(&player_checkers[i])) {
+      player_has_move = 0;
+    }
+  }
+  return player_has_move;
+}
+
 
 // Sub0.305: checker jumping & movement
 
@@ -719,7 +760,7 @@ void move_checker(Tile* tile_array, Checker* active_checker,
 		  uint8_t active_tile, uint8_t destination_tile)
 {
   /*
-    move a checker from its current position to the new position at destination
+    move a checker from its current position to new position at destination
     tile; we don't have to worry about whether this move is valid, since this
     is already checked before calling this procedure, where:
 
@@ -746,6 +787,7 @@ void move_checker(Tile* tile_array, Checker* active_checker,
   if(x_y[1] == 0 || x_y[1] == 7){
     active_checker->is_kinged = 1;
   }
+  play_move_sound();
 }
 
 
@@ -781,6 +823,8 @@ uint8_t jump_checker(Tile* tile_array, Checker* active_checker,
   if(x_y[1] == 0 || x_y[1] == 7){
     active_checker->is_kinged = 1;
   }
+
+  play_jump_sound();
 
   return rm_tile;
 }
@@ -824,7 +868,6 @@ uint8_t player_piece_on_tile(Tile* tile_array, uint8_t tile_highlighted,
   return (tile_array[tile_highlighted].has_checker == current_turn);
 }
 
-
 // Sub0.309: debounce reset
 void bouncer_reset()
 {
@@ -834,6 +877,30 @@ void bouncer_reset()
   if(bouncer < 3){
     bouncer++;
   }
+}
+
+// Sub0.310: sounds & music
+
+void play_move_sound(){
+  // play the movement sound
+  tone(SPEAKER_PIN, NOTE_A4, DUR_MOVE);
+}
+
+void play_jump_sound(){
+  tone(SPEAKER_PIN, NOTE_C4, DUR_JUMP);
+}
+
+void play_victory_music(){
+  tone(SPEAKER_PIN, NOTE_C4, DUR_NOTE1);
+  delay(NOTE_DELAY);
+  noTone(SPEAKER_PIN);
+  tone(SPEAKER_PIN, NOTE_F4, DUR_NOTE2);
+  delay(NOTE_DELAY);
+  noTone(SPEAKER_PIN);
+  tone(SPEAKER_PIN, NOTE_D4, DUR_NOTE3);
+  delay(NOTE_DELAY);
+  noTone(SPEAKER_PIN);
+  tone(SPEAKER_PIN, NOTE_B4, DUR_NOTE4);
 }
 
 // Sub0.310: debug procedures
@@ -1009,9 +1076,11 @@ void print_board_data(Tile* tile_array){
   }
 }
 
-//*****************************************************************************
-//                          Sec?: Setup Procedure     
-//*****************************************************************************
+
+
+//****************************************************************************
+//                          Sec0.4: Setup Procedure     
+//****************************************************************************
 
 void setup()
 {
@@ -1035,14 +1104,14 @@ void setup()
   }
 
   // Sub0.401 drawing the checker board
-  tft.fillScreen(0); // fill to black  
-  lcd_image_draw(&cb_img, &tft, 0, 0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
 
   // Sub0.402: set up pins
   // joystick
-  pinMode(JOYSTICK_BUTTON, INPUT);     // tell arduino to read joybutton inputs
+  pinMode(JOYSTICK_BUTTON, INPUT);     // read joybutton inputs
   digitalWrite(JOYSTICK_BUTTON, HIGH); // button presses set voltage to LOW!!
 
+  pinMode(SPEAKER_PIN, OUTPUT);
   // debug button (optional)
   pinMode(DEBUG_BUTTON, INPUT);
   digitalWrite(DEBUG_BUTTON, HIGH);
@@ -1051,8 +1120,8 @@ void setup()
   joy_x = analogRead(JOYSTICK_HORIZ); // the joystick must be in NEUTRAL 
   joy_y = analogRead(JOYSTICK_VERT);  // POSITION AT THIS STAGE!
   /* determine the minimum x and y remap values, so that we map the default
-     reading of the x and y position of the joystick to exactly 0; this formula
-     was mathematically determined from the Arduino map function's source code,
+     reading of the x and y position of the joystick to exactly 0; formula
+     was mathematically determined from the Arduino map function's source code
      casting here is necessary to avoid overflow when multiplying by 1000. */
   joy_min_x = (((int32_t) joy_x) * JOY_REMAP_MAX) / (joy_x - VOLT_MAX);
   joy_min_y = (((int32_t) joy_y) * JOY_REMAP_MAX) / (joy_y - VOLT_MAX);
@@ -1063,9 +1132,9 @@ void setup()
 }
 
 
-//*****************************************************************************
+//****************************************************************************
 //                        Sec0.5: Arduino Loop Procedure
-//*****************************************************************************
+//****************************************************************************
 
 void loop()
 {
@@ -1081,6 +1150,9 @@ void loop()
 
   if (game_state == SETUP_MODE){
     // Sub0.501: game setup
+
+    tft.fillScreen(0); // fill to black  
+    lcd_image_draw(&cb_img, &tft, 0, 0, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
     // Fill the red checker array with blank checkers
     for (uint8_t i = 1; i < NUM_TILES; i++){
@@ -1117,10 +1189,13 @@ void loop()
 		((i+40)/8)%2); // works, don't know why
     }
     
-    player_checkers = &blue_checkers[0];
+    red_dead = 0;
+    blue_dead = 0;
+    player_turn = TURN_RED;
+    turn_change = 1;
+    tile_highlighted = DEFAULT_TILE;
     game_state = PLAY_MODE;
     tile_array[0].has_checker = 42;
-
 
   }
 
@@ -1141,9 +1216,14 @@ void loop()
 	  player_checkers[i].jumps[j] = VOID_TILE;
 	}
       }
-      // recompute moves and jumps for all checkers in current player's chckers
+      // recompute moves and jumps for all checkers in current player's chkers
       no_fjumps = compute_moves(tile_array, player_checkers, 
 				(-1) * player_turn);
+      no_moves = player_has_move(player_checkers);
+
+      if (no_moves) {
+	win_screen((-1) * player_turn);
+      }
       turn_change = 0;
 
     }
@@ -1192,7 +1272,7 @@ void loop()
 	if (player_piece_on_tile(tile_array, tile_highlighted, player_turn)){
 	  // set active checker to the one we're selecting
 	  active_checker = 
-	 (Checker*) &player_checkers[tile_array[tile_highlighted].checker_num];
+	(Checker*) &player_checkers[tile_array[tile_highlighted].checker_num];
 
 	  if (no_fjumps) {
 	    // check whether piece can move
@@ -1229,14 +1309,14 @@ void loop()
 	    // move checker
 	    move_checker(tile_array, active_checker, 
 			 tile_highlighted, subtile_highlighted);
-	    clear_draw(tile_array, active_checker, red_checkers, blue_checkers,
-		       tile_highlighted, subtile_highlighted);
+	    clear_draw(tile_array, active_checker, red_checkers, 
+		       blue_checkers, tile_highlighted, subtile_highlighted);
 	    turn_change = 1;
 	    highlight_tile(tile_highlighted, player_turn);
 	  }
 	  else if(!checker_locked){
-	    clear_draw(tile_array, active_checker, red_checkers, blue_checkers,
-		       tile_highlighted, subtile_highlighted);
+	    clear_draw(tile_array, active_checker, red_checkers, 
+	               blue_checkers, tile_highlighted, subtile_highlighted);
 	    highlight_tile(tile_highlighted, player_turn);
 
 	  }
@@ -1277,8 +1357,8 @@ void loop()
 	    tile_array[rm_tile].has_checker = 0;
 	    tile_array[rm_tile].checker_num = 13;
 
-	    clear_draw(tile_array, active_checker, red_checkers, blue_checkers,
-		       tile_highlighted, subtile_highlighted);
+	    clear_draw(tile_array, active_checker, red_checkers, 
+		       blue_checkers, tile_highlighted, subtile_highlighted);
 
 	    // nullify the jumping checkers moves and jumps, for now
 	    for (uint8_t i = 0; i < POSSIBLE_MOVES; i++){
@@ -1286,7 +1366,7 @@ void loop()
 	      active_checker->jumps[i] = VOID_TILE;
 	    }
 
-	    //*****************************************************************
+	    //****************************************************************
 
 	    (*player_dead) = (*player_dead) + 1;
 	    populate_graveyard(*player_dead, player_turn);
@@ -1317,8 +1397,8 @@ void loop()
 
 	  }
 	  else if(!checker_locked) {
-	    clear_draw(tile_array, active_checker, red_checkers, blue_checkers,
-		       tile_highlighted, subtile_highlighted);
+	    clear_draw(tile_array, active_checker, red_checkers, 
+		       blue_checkers, tile_highlighted, subtile_highlighted);
 	    cursor_mode = TILE_MOVEMENT;
 	    highlight_tile(tile_highlighted, player_turn);
 	    
